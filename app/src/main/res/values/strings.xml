@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">Nero</string>
+    <string name="textfield_label">This is a sample test hit</string>
+    <string name="edit">Edit</string>
+    <string name="favorite">Favorite</string>
+    <string name="more">More</string>
+    <string name="compass_image_content_desc">Compass image</string>
+    <string name="not_available">NA</string>
+    <string name="stop_notifications">Stop Notifications</string>
+    <string name="notification_background_service_running">Activity tracking in progress</string>
+    <string name="notification_channel_tracking_service">Tracking service</string>
+</resources>
