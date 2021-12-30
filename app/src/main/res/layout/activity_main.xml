@@ -14,6 +14,7 @@
         app:layout_constraintEnd_toEndOf="@id/root"
         app:layout_constraintStart_toStartOf="@id/root"
         app:layout_constraintTop_toTopOf="@id/root"
+        android:layout_margin="@dimen/default_padding"
         android:layout_height="300dp"/>
 
     <com.google.android.material.textview.MaterialTextView
@@ -21,11 +22,34 @@
         style="@style/TextAppearance.AppCompat.Display1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:gravity="center"
+        android:layout_margin="@dimen/default_padding"
+        android:gravity="start"
         app:layout_constraintEnd_toEndOf="@id/root"
         app:layout_constraintStart_toStartOf="@id/root"
         app:layout_constraintTop_toBottomOf="@id/live_chart"
         tools:text="Test" />
+
+    <com.github.mikephil.charting.charts.BarChart
+        android:id="@+id/bar_chart"
+        android:layout_width="match_parent"
+        android:layout_margin="@dimen/default_padding"
+        app:layout_constraintEnd_toEndOf="@id/root"
+        app:layout_constraintStart_toStartOf="@id/root"
+        app:layout_constraintTop_toBottomOf="@id/acceleration_reading"
+        android:layout_height="300dp"/>
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/stroke_rate"
+        style="@style/TextAppearance.AppCompat.Display1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="@dimen/default_padding"
+        android:gravity="start"
+        app:layout_constraintEnd_toEndOf="@id/root"
+        app:layout_constraintStart_toStartOf="@id/root"
+        app:layout_constraintTop_toBottomOf="@id/bar_chart"
+        tools:text="Test" />
+
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>
