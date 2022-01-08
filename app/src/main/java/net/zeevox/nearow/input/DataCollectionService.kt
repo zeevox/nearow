@@ -9,14 +9,14 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.net.wifi.p2p.WifiP2pManager
+import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationCompat
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import net.zeevox.nearow.MainActivity
 import net.zeevox.nearow.R
-import kotlin.math.sqrt
+
 
 class DataCollectionService : Service(), SensorEventListener {
 
@@ -28,11 +28,38 @@ class DataCollectionService : Service(), SensorEventListener {
     private val notificationStopRequestCode = 2
 
     companion object {
-        const val KEY_ACCELERATION_MAGNITUDE = "acceleration"
         const val KEY_BACKGROUND = "background"
         const val KEY_NOTIFICATION_ID = "notificationId"
-        const val KEY_ON_SENSOR_CHANGED_ACTION = "net.zeevox.nearow.ON_SENSOR_CHANGED"
         const val KEY_NOTIFICATION_STOP_ACTION = "net.zeevox.nearow.NOTIFICATION_STOP"
+
+        const val SAMPLE_BUFFER_SIZE = 32
+        const val COMPONENTS_PER_SAMPLE = 64
+    }
+
+    /** https://developer.android.com/guide/components/bound-services#Binder **/
+    private val binder = LocalBinder()
+
+    /**
+     * Class used for the client Binder.  Because we know this service always
+     * runs in the same process as its clients, we don't need to deal with IPC.
+     */
+    inner class LocalBinder : Binder() {
+        // Return this instance of LocalService so clients can call public methods
+        fun getService(): DataCollectionService = this@DataCollectionService
+    }
+
+    override fun onBind(intent: Intent): IBinder {
+        return binder
+    }
+
+    interface DataUpdateListener {
+        fun onNewAccelerometerReadings(readings: FloatArray, samplingRate: Float)
+    }
+
+    private var listener: DataUpdateListener? = null
+
+    fun setListener(listener: DataUpdateListener) {
+        this.listener = listener
     }
 
     override fun onCreate() {
@@ -43,7 +70,7 @@ class DataCollectionService : Service(), SensorEventListener {
             sensorManager.registerListener(
                 this,
                 accelerometer,
-                SensorManager.SENSOR_DELAY_GAME
+                SensorManager.SENSOR_DELAY_FASTEST
             )
         }
 
@@ -51,8 +78,11 @@ class DataCollectionService : Service(), SensorEventListener {
         startForeground(notificationId, notification)
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
+    private var startTime = System.nanoTime()
+    private var count = 0
+
+    private fun calculateSensorFrequency(): Float {
+        return count++ / ((System.nanoTime() - startTime) / 1000000000f)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -73,27 +103,16 @@ class DataCollectionService : Service(), SensorEventListener {
             )
         }
 
-        broadcastUpdate()
-    }
-
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-        // TODO accuracy handling?
-    }
-
-    private fun broadcastUpdate() {
-        val intent = Intent()
-        intent.putExtra(
-            KEY_ACCELERATION_MAGNITUDE,
-            sqrt(accelerometerReading.map { x -> x * x }.reduce { x, y -> x + y })
-        )
-        intent.action = KEY_ON_SENSOR_CHANGED_ACTION
-
-        LocalBroadcastManager.getInstance(applicationContext).sendBroadcast(intent)
-
         if (background) {
             val notification = createNotification()
             startForeground(notificationId, notification)
         } else stopForeground(true)
+
+        this.listener?.onNewAccelerometerReadings(accelerometerReading, calculateSensorFrequency())
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+        // TODO accuracy handling?
     }
 
     private fun createNotification(): Notification {
@@ -167,7 +186,7 @@ class DataCollectionService : Service(), SensorEventListener {
     class ActionListener : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
 
-            if (intent == null || intent.action == null) return;
+            if (intent == null || intent.action == null) return
 
             if (intent.action.equals(KEY_NOTIFICATION_STOP_ACTION)) {
                 context?.let {

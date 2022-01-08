@@ -9,4 +9,5 @@
     <string name="stop_notifications">Stop Notifications</string>
     <string name="notification_background_service_running">Activity tracking in progress</string>
     <string name="notification_channel_tracking_service">Tracking service</string>
+    <string name="stroke_rate_display_placeholder_text" formatted="false">"%1$.1f\n%2$.2f"</string>
 </resources>

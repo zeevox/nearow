@@ -1,15 +1,14 @@
 package net.zeevox.nearow
 
-import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
+import android.content.ServiceConnection
 import android.graphics.Color
 import android.os.Bundle
-import android.util.Log
+import android.os.IBinder
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.github.mikephil.charting.charts.BarChart
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.components.Legend
@@ -21,20 +20,43 @@ import com.github.mikephil.charting.data.*
 import com.github.mikephil.charting.utils.ColorTemplate
 import com.google.android.material.textview.MaterialTextView
 import net.zeevox.nearow.databinding.ActivityMainBinding
+import net.zeevox.nearow.fourier.SlidingDFT
 import net.zeevox.nearow.input.DataCollectionService
-import se.imagick.ft.slidingdft.DFTSlider
-import se.imagick.ft.slidingdft.DFTSliderImpl
 
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), DataCollectionService.DataUpdateListener {
     lateinit var binding: ActivityMainBinding
     lateinit var chart: LineChart
     lateinit var barChart: BarChart
     lateinit var strokeRate: MaterialTextView
 
-    val MAX_STROKE_RATE = 100
+    private lateinit var mService: DataCollectionService
+    private var mBound: Boolean = false
 
-    val slider: DFTSlider = DFTSliderImpl(MAX_STROKE_RATE)
+
+    /** Defines callbacks for service binding, passed to bindService()  */
+    private val connection = object : ServiceConnection {
+
+        override fun onServiceConnected(className: ComponentName, service: IBinder) {
+            // We've bound to LocalService, cast the IBinder and get LocalService instance
+            val binder = service as DataCollectionService.LocalBinder
+            mService = binder.getService()
+            mBound = true
+
+            // Listen to callbacks from the service
+            mService.setListener(this@MainActivity)
+        }
+
+        override fun onServiceDisconnected(arg0: ComponentName) {
+            mBound = false
+        }
+    }
+
+    private val slider: SlidingDFT =
+        SlidingDFT(
+            DataCollectionService.SAMPLE_BUFFER_SIZE,
+            DataCollectionService.COMPONENTS_PER_SAMPLE
+        )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(R.style.Theme_Nearow)
@@ -44,12 +66,6 @@ class MainActivity : AppCompatActivity() {
         binding.root.keepScreenOn = true
 
         strokeRate = findViewById(R.id.stroke_rate)
-
-        LocalBroadcastManager.getInstance(this).registerReceiver(
-            broadcastReceiver, IntentFilter(
-                DataCollectionService.KEY_ON_SENSOR_CHANGED_ACTION
-            )
-        )
 
         setupChart()
         setupBarChart()
@@ -82,7 +98,7 @@ class MainActivity : AppCompatActivity() {
 
         val leftAxis: YAxis = chart.axisLeft
         leftAxis.textColor = Color.BLACK
-        leftAxis.axisMinimum = 0f
+//        leftAxis.axisMinimum = 0f
         leftAxis.setDrawGridLines(true)
 
         val rightAxis: YAxis = chart.axisRight
@@ -112,9 +128,18 @@ class MainActivity : AppCompatActivity() {
         startForegroundServiceForSensors(true)
     }
 
-    override fun onDestroy() {
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(broadcastReceiver)
-        super.onDestroy()
+    override fun onStart() {
+        super.onStart()
+        // Bind to LocalService
+        Intent(this, DataCollectionService::class.java).also { intent ->
+            bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        unbindService(connection)
+        mBound = false
     }
 
     private fun createSet(): LineDataSet {
@@ -166,59 +191,48 @@ class MainActivity : AppCompatActivity() {
 
         // limit the number of visible entries
         chart.setVisibleXRangeMaximum(120F)
-        // chart.setVisibleYRange(30, AxisDependency.LEFT);
+//        chart.setVisibleYRange(-10f, 10f, AxisDependency.LEFT);
 
         // move to the latest entry
         chart.moveViewToX(data.entryCount.toFloat())
     }
 
-    private val broadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            val acceleration =
-                intent.getFloatExtra(DataCollectionService.KEY_ACCELERATION_MAGNITUDE, -1.0f)
-            binding.accelerationReading.text = acceleration.toString()
-            addEntry(acceleration)
+    private fun frequencyComponentToRate(
+        wavelength: Double,
+        samplingRate: Float,
+        sampleBufferSize: Int,
+    ): Double {
+        return wavelength * samplingRate / sampleBufferSize * 60
+    }
 
-            slider.slide(acceleration.toDouble())
+    override fun onNewAccelerometerReadings(readings: FloatArray, samplingRate: Float) {
+//        val acceleration = sqrt(readings.map { x -> x * x }.reduce { x, y -> x + y })
+        val acceleration = readings[0]
 
-            val values = mutableListOf<BarEntry>()
+        binding.accelerationReading.text = acceleration.toString()
+        addEntry(acceleration)
 
-            var maxMagnitude: Double = -1.0
-            var maxFrequencyBin: Int = 0
+        slider.slide(acceleration.toDouble())
 
-            for (frequencyComponentNo in 1..MAX_STROKE_RATE) {
-                Log.d(this.javaClass.simpleName, slider.latencyInSamples.toString())
-                val polar =
-                    slider.getPolar(frequencyComponentNo) // NB! See documentation about instance reuse.
-
-                val complex =
-                    slider.getComplex(frequencyComponentNo) // NB! See documentation about instance reuse.
-
-                val realSum = slider.getRealSum(false)
-
-                if (polar.magnitude > maxMagnitude) {
-                    maxMagnitude = polar.magnitude
-                    maxFrequencyBin = frequencyComponentNo
-                }
-
-                values.add(
-                    BarEntry(
-                        frequencyComponentNo.toFloat(),
-                        polar.magnitude.toFloat()
-                    )
-                )
-
-                Log.d(
-                    this.javaClass.simpleName,
-                    "$frequencyComponentNo ${polar.magnitude} ${polar.phase} ${complex.real} ${complex.imaginary} $realSum"
-                )
-            }
-
-            createFourierSet(values)
-            barChart.invalidate()
-
-            strokeRate.text = (maxFrequencyBin.toFloat() * 50 / (MAX_STROKE_RATE * 2) * 60).toString() + "bpm"
-
+        val values = slider.sliderFrequencies.map { frequency ->
+            BarEntry(
+                frequency.wavelength.toFloat(),
+                frequency.polar.magnitude.toFloat()
+            )
         }
+
+        createFourierSet(values)
+        barChart.invalidate()
+
+        val bestWavelength: Double = slider.getMaximallyCorrelatedFrequency()?.wavelength ?: 0.0
+
+        strokeRate.text = getString(R.string.stroke_rate_display_placeholder_text,
+            frequencyComponentToRate(
+                bestWavelength,
+                samplingRate,
+                DataCollectionService.SAMPLE_BUFFER_SIZE,
+            ),
+            samplingRate
+        )
     }
 }
