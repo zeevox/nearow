@@ -19,16 +19,17 @@ import com.github.mikephil.charting.components.YAxis.AxisDependency
 import com.github.mikephil.charting.data.*
 import com.github.mikephil.charting.utils.ColorTemplate
 import com.google.android.material.textview.MaterialTextView
+import net.zeevox.nearow.data.DataProcessor
+import net.zeevox.nearow.data.StrokeEvent
 import net.zeevox.nearow.databinding.ActivityMainBinding
-import net.zeevox.nearow.fourier.SlidingDFT
 import net.zeevox.nearow.input.DataCollectionService
 
 
-class MainActivity : AppCompatActivity(), DataCollectionService.DataUpdateListener {
+class MainActivity : AppCompatActivity(), DataProcessor.DataUpdateListener {
     lateinit var binding: ActivityMainBinding
     lateinit var chart: LineChart
     lateinit var barChart: BarChart
-    lateinit var strokeRate: MaterialTextView
+    lateinit var strokeRateTextView: MaterialTextView
 
     private lateinit var mService: DataCollectionService
     private var mBound: Boolean = false
@@ -44,19 +45,13 @@ class MainActivity : AppCompatActivity(), DataCollectionService.DataUpdateListen
             mBound = true
 
             // Listen to callbacks from the service
-            mService.setListener(this@MainActivity)
+            mService.setDataUpdateListener(this@MainActivity)
         }
 
         override fun onServiceDisconnected(arg0: ComponentName) {
             mBound = false
         }
     }
-
-    private val slider: SlidingDFT =
-        SlidingDFT(
-            DataCollectionService.SAMPLE_BUFFER_SIZE,
-            DataCollectionService.COMPONENTS_PER_SAMPLE
-        )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(R.style.Theme_Nearow)
@@ -65,10 +60,10 @@ class MainActivity : AppCompatActivity(), DataCollectionService.DataUpdateListen
         setContentView(binding.root)
         binding.root.keepScreenOn = true
 
-        strokeRate = findViewById(R.id.stroke_rate)
-
         setupChart()
         setupBarChart()
+
+        strokeRateTextView = findViewById(R.id.stroke_rate)
     }
 
     private fun setupChart() {
@@ -158,7 +153,7 @@ class MainActivity : AppCompatActivity(), DataCollectionService.DataUpdateListen
         return set
     }
 
-    private fun createFourierSet(values: List<BarEntry>) {
+    private fun createBarSet(values: List<BarEntry>) {
         val set1: BarDataSet
 
         if (barChart.data != null &&
@@ -170,7 +165,6 @@ class MainActivity : AppCompatActivity(), DataCollectionService.DataUpdateListen
             barChart.notifyDataSetChanged()
         } else barChart.data = BarData(listOf(BarDataSet(values, "DFT")))
     }
-
 
     private fun addEntry(value: Float) {
         val data: LineData = chart.data
@@ -197,42 +191,37 @@ class MainActivity : AppCompatActivity(), DataCollectionService.DataUpdateListen
         chart.moveViewToX(data.entryCount.toFloat())
     }
 
-    private fun frequencyComponentToRate(
-        wavelength: Double,
-        samplingRate: Float,
-        sampleBufferSize: Int,
-    ): Double {
-        return wavelength * samplingRate / sampleBufferSize * 60
+
+    override fun onStrokeTaken(strokeEvent: StrokeEvent) {
+        strokeRateTextView.text = getString(
+            R.string.stroke_rate_display_placeholder_text,
+            strokeEvent.strokeRate,
+            strokeEvent.strokeRate
+        )
     }
 
-    override fun onNewAccelerometerReadings(readings: FloatArray, samplingRate: Float) {
-//        val acceleration = sqrt(readings.map { x -> x * x }.reduce { x, y -> x + y })
-        val acceleration = readings[0]
+    override fun onNewAccelerationReading(reading: Double) {
+        binding.accelerationReading.text = String.format("%.3f", reading)
+        addEntry(reading.toFloat())
+    }
 
-        binding.accelerationReading.text = acceleration.toString()
-        addEntry(acceleration)
+    override fun onStrokeRateUpdate(strokeRate: Double) {
+        strokeRateTextView.text = getString(
+            R.string.stroke_rate_display_placeholder_text,
+            strokeRate,
+            System.currentTimeMillis() / 1000.0
+        )
+    }
 
-        slider.slide(acceleration.toDouble())
-
-        val values = slider.sliderFrequencies.map { frequency ->
+    override fun onNewAutocorrelationTable(array: DoubleArray) {
+        val values = array.mapIndexed { index, frequency ->
             BarEntry(
-                frequency.wavelength.toFloat(),
-                frequency.polar.magnitude.toFloat()
+                index.toFloat(),
+                frequency.toFloat()
             )
         }
 
-        createFourierSet(values)
+        createBarSet(values)
         barChart.invalidate()
-
-        val bestWavelength: Double = slider.getMaximallyCorrelatedFrequency()?.wavelength ?: 0.0
-
-        strokeRate.text = getString(R.string.stroke_rate_display_placeholder_text,
-            frequencyComponentToRate(
-                bestWavelength,
-                samplingRate,
-                DataCollectionService.SAMPLE_BUFFER_SIZE,
-            ),
-            samplingRate
-        )
     }
 }

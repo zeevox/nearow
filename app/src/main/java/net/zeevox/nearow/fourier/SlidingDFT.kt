@@ -24,6 +24,18 @@ package net.zeevox.nearow.fourier
  * THE SOFTWARE.
  */
 
+/*
+* Resources used
+* https://discourse.mcneel.com/t/method-for-finding-period-of-complex-periodic-wave/110181/32
+* https://github.com/olavholten/imagick-FT/blob/master/src/main/java/se/imagick/ft/slidingdft/DFTSlider.java
+* https://github.com/olavholten/imagick-FT/blob/master/src/main/java/se/imagick/ft/slidingdft/DFTSliderFilter.java
+* https://stackoverflow.com/questions/17390677/how-can-i-get-dft-fft-output-frequencies-in-hertz
+* https://developer.android.com/reference/android/hardware/SensorDirectChannel
+* http://www.music.mcgill.ca/~ich/research/misc/papers/cr1137.pdf
+* why this is bad: https://dsp.stackexchange.com/questions/40296/is-there-a-way-to-do-a-dft-with-low-latency-and-fine-frequency-resolution-at-low
+*
+* */
+
 
 /**
  * Initialise a new sliding DFT processor

@@ -1,31 +1,45 @@
 package net.zeevox.nearow.input
 
+import android.Manifest
 import android.app.*
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.net.wifi.p2p.WifiP2pManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
+import io.objectbox.Box
 import net.zeevox.nearow.MainActivity
+import net.zeevox.nearow.MyObjectBox
 import net.zeevox.nearow.R
+import net.zeevox.nearow.data.DataProcessor
+import net.zeevox.nearow.model.DataRecord
 
+// initially based on https://www.raywenderlich.com/10838302-sensors-tutorial-for-android-getting-started
 
-class DataCollectionService : Service(), SensorEventListener {
+class DataCollectionService : Service(), SensorEventListener, LocationListener {
 
     private lateinit var sensorManager: SensorManager
-    private val accelerometerReading = FloatArray(3)
+    private lateinit var locationManager: LocationManager
+
     private var background = false
     private val notificationActivityRequestCode = 0
     private val notificationId = 1
     private val notificationStopRequestCode = 2
+
+    private lateinit var dataProcessor: DataProcessor
 
     companion object {
         const val KEY_BACKGROUND = "background"
@@ -48,24 +62,37 @@ class DataCollectionService : Service(), SensorEventListener {
         fun getService(): DataCollectionService = this@DataCollectionService
     }
 
-    override fun onBind(intent: Intent): IBinder {
-        return binder
-    }
+    override fun onBind(intent: Intent): IBinder = binder
 
-    interface DataUpdateListener {
-        fun onNewAccelerometerReadings(readings: FloatArray, samplingRate: Float)
-    }
+    fun setDataUpdateListener(listener: DataProcessor.DataUpdateListener) =
+        dataProcessor.setListener(listener)
 
-    private var listener: DataUpdateListener? = null
-
-    fun setListener(listener: DataUpdateListener) {
-        this.listener = listener
-    }
+    // ObjectBox was chosen because of the below
+    // https://proandroiddev.com/android-databases-performance-crud-a963dd7bb0eb
+    // ref https://github.com/objectbox/objectbox-java
+    private lateinit var box: Box<DataRecord>
 
     override fun onCreate() {
         super.onCreate()
-        sensorManager = getSystemService(AppCompatActivity.SENSOR_SERVICE) as SensorManager
 
+        initialiseDataProcessor()
+
+        registerSensorListener()
+        registerGpsListener()
+
+        val notification = createNotification()
+        startForeground(notificationId, notification)
+    }
+
+    private fun initialiseDataProcessor() {
+        val boxStore = MyObjectBox.builder().androidContext(this@DataCollectionService).build()
+        box = boxStore.boxFor(DataRecord::class.java)
+
+        dataProcessor = DataProcessor(box)
+    }
+
+    private fun registerSensorListener() {
+        sensorManager = getSystemService(AppCompatActivity.SENSOR_SERVICE) as SensorManager
         sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)?.also { accelerometer ->
             sensorManager.registerListener(
                 this,
@@ -73,16 +100,35 @@ class DataCollectionService : Service(), SensorEventListener {
                 SensorManager.SENSOR_DELAY_FASTEST
             )
         }
-
-        val notification = createNotification()
-        startForeground(notificationId, notification)
     }
 
-    private var startTime = System.nanoTime()
-    private var count = 0
+    private fun registerGpsListener() {
+        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
-    private fun calculateSensorFrequency(): Float {
-        return count++ / ((System.nanoTime() - startTime) / 1000000000f)
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return
+        }
+
+        locationManager.requestLocationUpdates(
+            LocationManager.GPS_PROVIDER,
+            0L,
+            0f,
+            this@DataCollectionService
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -94,21 +140,14 @@ class DataCollectionService : Service(), SensorEventListener {
         if (event == null) return
 
         when (event.sensor.type) {
-            Sensor.TYPE_LINEAR_ACCELERATION -> System.arraycopy(
-                event.values,
-                0,
-                accelerometerReading,
-                0,
-                accelerometerReading.size
-            )
+            Sensor.TYPE_LINEAR_ACCELERATION -> dataProcessor.addAccelerometerReading(event.values)
         }
+
 
         if (background) {
             val notification = createNotification()
             startForeground(notificationId, notification)
         } else stopForeground(true)
-
-        this.listener?.onNewAccelerometerReadings(accelerometerReading, calculateSensorFrequency())
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
@@ -184,21 +223,47 @@ class DataCollectionService : Service(), SensorEventListener {
     }
 
     class ActionListener : BroadcastReceiver() {
+        /**
+         * This method is called when the BroadcastReceiver is receiving an Intent
+         * broadcast.  During this time you can use the other methods on
+         * BroadcastReceiver to view/modify the current result values.  This method
+         * is always called within the main thread of its process, unless you
+         * explicitly asked for it to be scheduled on a different thread using
+         * [android.content.Context.registerReceiver].
+         *
+         * If you wish to interact with a service that is already running and previously
+         * bound using [bindService()][android.content.Context.bindService], you can
+         * use [peekService].
+         *
+         * [onReceive] implementations should respond only to known actions, ignoring
+         * any unexpected [Intent] that they may receive.
+         *
+         * @param context The Context in which the receiver is running.
+         * @param intent The Intent being received.
+         */
         override fun onReceive(context: Context?, intent: Intent?) {
 
             if (intent == null || intent.action == null) return
 
-            if (intent.action.equals(KEY_NOTIFICATION_STOP_ACTION)) {
-                context?.let {
-                    val notificationManager =
-                        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                    val dataServiceIntent = Intent(context, DataCollectionService::class.java)
-                    context.stopService(dataServiceIntent)
-                    val notificationId = intent.getIntExtra(KEY_NOTIFICATION_ID, -1)
-                    if (notificationId != -1) notificationManager.cancel(notificationId)
-                }
+            if (intent.action.equals(KEY_NOTIFICATION_STOP_ACTION)) context?.let {
+                val notificationManager =
+                    context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                val dataServiceIntent = Intent(context, DataCollectionService::class.java)
+                context.stopService(dataServiceIntent)
+                val notificationId = intent.getIntExtra(KEY_NOTIFICATION_ID, -1)
+                if (notificationId != -1) notificationManager.cancel(notificationId)
             }
 
         }
     }
+
+    /**
+     * Called when the location has changed. A wakelock may be held on behalf on the listener for
+     * some brief amount of time as this callback executes. If this callback performs long running
+     * operations, it is the client's responsibility to obtain their own wakelock if necessary.
+     *
+     * @param location the updated location
+     */
+    override fun onLocationChanged(location: Location) = dataProcessor.addGpsReading(location)
+
 }

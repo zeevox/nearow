@@ -27,16 +27,8 @@
         app:layout_constraintEnd_toEndOf="@id/root"
         app:layout_constraintStart_toStartOf="@id/root"
         app:layout_constraintTop_toBottomOf="@id/live_chart"
-        tools:text="Test" />
-
-    <com.github.mikephil.charting.charts.BarChart
-        android:id="@+id/bar_chart"
-        android:layout_width="match_parent"
-        android:layout_margin="@dimen/default_padding"
-        app:layout_constraintEnd_toEndOf="@id/root"
-        app:layout_constraintStart_toStartOf="@id/root"
-        app:layout_constraintTop_toBottomOf="@id/acceleration_reading"
-        android:layout_height="300dp"/>
+        android:text="TEST TEST"
+        tools:text="0.5ms¯²" />
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/stroke_rate"
@@ -48,7 +40,16 @@
         app:layout_constraintEnd_toEndOf="@id/root"
         app:layout_constraintStart_toStartOf="@id/root"
         app:layout_constraintTop_toBottomOf="@id/bar_chart"
-        tools:text="Test" />
+        tools:text="53spm" />
+
+    <com.github.mikephil.charting.charts.BarChart
+        android:id="@+id/bar_chart"
+        android:layout_width="match_parent"
+        android:layout_margin="@dimen/default_padding"
+        app:layout_constraintEnd_toEndOf="@id/root"
+        app:layout_constraintStart_toStartOf="@id/root"
+        app:layout_constraintTop_toBottomOf="@id/acceleration_reading"
+        android:layout_height="300dp"/>
 
 
 
