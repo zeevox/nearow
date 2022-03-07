@@ -21,11 +21,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import io.objectbox.Box
-import net.zeevox.nearow.MainActivity
-import net.zeevox.nearow.MyObjectBox
 import net.zeevox.nearow.R
 import net.zeevox.nearow.data.DataProcessor
 import net.zeevox.nearow.model.DataRecord
+import net.zeevox.nearow.model.MyObjectBox
+import net.zeevox.nearow.ui.MainActivity
 
 // initially based on https://www.raywenderlich.com/10838302-sensors-tutorial-for-android-getting-started
 
@@ -41,13 +41,17 @@ class DataCollectionService : Service(), SensorEventListener, LocationListener {
 
     private lateinit var dataProcessor: DataProcessor
 
+    private val dataProcessingThread = Thread {
+        dataProcessor = DataProcessor(box)
+    }
+
     companion object {
         const val KEY_BACKGROUND = "background"
         const val KEY_NOTIFICATION_ID = "notificationId"
         const val KEY_NOTIFICATION_STOP_ACTION = "net.zeevox.nearow.NOTIFICATION_STOP"
 
-        const val SAMPLE_BUFFER_SIZE = 32
-        const val COMPONENTS_PER_SAMPLE = 64
+        // 20,000 us => ~50Hz sampling
+        const val ACCELEROMETER_SAMPLING_DELAY = 20000
     }
 
     /** https://developer.android.com/guide/components/bound-services#Binder **/
@@ -88,7 +92,7 @@ class DataCollectionService : Service(), SensorEventListener, LocationListener {
         val boxStore = MyObjectBox.builder().androidContext(this@DataCollectionService).build()
         box = boxStore.boxFor(DataRecord::class.java)
 
-        dataProcessor = DataProcessor(box)
+        dataProcessingThread.start()
     }
 
     private fun registerSensorListener() {
@@ -97,7 +101,7 @@ class DataCollectionService : Service(), SensorEventListener, LocationListener {
             sensorManager.registerListener(
                 this,
                 accelerometer,
-                SensorManager.SENSOR_DELAY_FASTEST
+                ACCELEROMETER_SAMPLING_DELAY
             )
         }
     }

@@ -4,59 +4,6 @@
   "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
   "entities": [
     {
-      "id": "2:7641924231112738680",
-      "lastPropertyId": "2:7996918792349052474",
-      "name": "StrokeEventEntity",
-      "properties": [
-        {
-          "id": "1:3962895499961784225",
-          "name": "strokeRate",
-          "type": 8
-        },
-        {
-          "id": "2:7996918792349052474",
-          "name": "strokeEventId",
-          "type": 6,
-          "flags": 1
-        }
-      ],
-      "relations": []
-    },
-    {
-      "id": "3:7069005497586886923",
-      "lastPropertyId": "6:3786882073035826161",
-      "name": "AccelerationReading",
-      "properties": [
-        {
-          "id": "1:8753044714229545771",
-          "name": "x",
-          "type": 7
-        },
-        {
-          "id": "2:7865631719303911893",
-          "name": "y",
-          "type": 7
-        },
-        {
-          "id": "3:3935548926988983921",
-          "name": "z",
-          "type": 7
-        },
-        {
-          "id": "5:687126963628404486",
-          "name": "id",
-          "type": 6,
-          "flags": 1
-        },
-        {
-          "id": "6:3786882073035826161",
-          "name": "timestampMillis",
-          "type": 6
-        }
-      ],
-      "relations": []
-    },
-    {
       "id": "4:2884844852771093805",
       "lastPropertyId": "12:2348726883888462423",
       "name": "GpsReading",
@@ -187,7 +134,9 @@
   "modelVersion": 5,
   "modelVersionParserMinimum": 5,
   "retiredEntityUids": [
-    1802355198106045175
+    1802355198106045175,
+    7069005497586886923,
+    7641924231112738680
   ],
   "retiredIndexUids": [],
   "retiredPropertyUids": [
@@ -198,7 +147,14 @@
     9136819853208919680,
     4345193456008930276,
     7936390944709589527,
-    3811263404544864654
+    3811263404544864654,
+    8753044714229545771,
+    7865631719303911893,
+    3935548926988983921,
+    687126963628404486,
+    3786882073035826161,
+    3962895499961784225,
+    7996918792349052474
   ],
   "retiredRelationUids": [],
   "version": 1

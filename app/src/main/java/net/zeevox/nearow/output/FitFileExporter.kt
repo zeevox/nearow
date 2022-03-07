@@ -15,7 +15,7 @@ package net.zeevox.nearow.output
 import com.garmin.fit.*
 import io.objectbox.Box
 import net.zeevox.nearow.BuildConfig
-import net.zeevox.nearow.model.AccelerationReading
+import net.zeevox.nearow.model.DataRecord
 import java.util.*
 import java.util.TimeZone
 import kotlin.math.abs
@@ -60,7 +60,7 @@ class FitFileExporter {
             return developerIdMesg
         }
 
-        fun createTimeBasedActivity(filename: String, accelBox: Box<AccelerationReading>) {
+        fun createTimeBasedActivity(filename: String, accelBox: Box<DataRecord>) {
             val twoPI = Math.PI * 2.0
             val semiCirclesPerMeter = 107.173
             val messages: MutableList<Mesg> = ArrayList()

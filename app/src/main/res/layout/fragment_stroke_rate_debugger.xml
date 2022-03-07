@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:id="@+id/root"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <com.github.mikephil.charting.charts.LineChart
+        android:id="@+id/live_chart"
+        android:layout_width="match_parent"
+        android:layout_height="300dp"
+        android:layout_margin="@dimen/default_padding"
+        app:layout_constraintEnd_toEndOf="@id/root"
+        app:layout_constraintStart_toStartOf="@id/root"
+        app:layout_constraintTop_toTopOf="@id/root" />
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/acceleration_reading"
+        style="@style/TextAppearance.AppCompat.Display1"
+        tools:text="0.5ms¯²"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="@dimen/default_padding"
+        android:gravity="start"
+        app:layout_constraintEnd_toEndOf="@id/root"
+        app:layout_constraintStart_toStartOf="@id/root"
+        app:layout_constraintTop_toBottomOf="@id/live_chart" />
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/stroke_rate"
+        style="@style/TextAppearance.AppCompat.Display1"
+        tools:text="53spm"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="@dimen/default_padding"
+        android:gravity="start"
+        app:layout_constraintEnd_toEndOf="@id/root"
+        app:layout_constraintStart_toStartOf="@id/root"
+        app:layout_constraintTop_toBottomOf="@id/bar_chart" />
+
+    <com.github.mikephil.charting.charts.BarChart
+        android:id="@+id/bar_chart"
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_margin="@dimen/default_padding"
+        app:layout_constraintEnd_toEndOf="@id/root"
+        app:layout_constraintStart_toStartOf="@id/root"
+        app:layout_constraintTop_toBottomOf="@id/acceleration_reading" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

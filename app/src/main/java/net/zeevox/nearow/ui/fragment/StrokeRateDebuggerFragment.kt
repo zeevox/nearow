@@ -1,73 +1,58 @@
-package net.zeevox.nearow
+package net.zeevox.nearow.ui.fragment
 
-import android.content.ComponentName
-import android.content.Context
-import android.content.Intent
-import android.content.ServiceConnection
 import android.graphics.Color
 import android.os.Bundle
-import android.os.IBinder
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
 import com.github.mikephil.charting.charts.BarChart
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.components.Legend
-import com.github.mikephil.charting.components.Legend.LegendForm
 import com.github.mikephil.charting.components.XAxis
 import com.github.mikephil.charting.components.YAxis
-import com.github.mikephil.charting.components.YAxis.AxisDependency
 import com.github.mikephil.charting.data.*
 import com.github.mikephil.charting.utils.ColorTemplate
 import com.google.android.material.textview.MaterialTextView
-import net.zeevox.nearow.data.DataProcessor
-import net.zeevox.nearow.data.StrokeEvent
-import net.zeevox.nearow.databinding.ActivityMainBinding
-import net.zeevox.nearow.input.DataCollectionService
+import net.zeevox.nearow.R
+import net.zeevox.nearow.databinding.FragmentStrokeRateDebuggerBinding
 
-
-class MainActivity : AppCompatActivity(), DataProcessor.DataUpdateListener {
-    lateinit var binding: ActivityMainBinding
+class StrokeRateDebuggerFragment : BaseFragment() {
     lateinit var chart: LineChart
     lateinit var barChart: BarChart
     lateinit var strokeRateTextView: MaterialTextView
 
-    private lateinit var mService: DataCollectionService
-    private var mBound: Boolean = false
+    private lateinit var binding: FragmentStrokeRateDebuggerBinding
 
+    override fun onCreateView(inflater: LayoutInflater,
+                              container: ViewGroup?,
+                              savedInstanceState: Bundle?): View {
+        binding = FragmentStrokeRateDebuggerBinding.inflate(inflater, container, false)
 
-    /** Defines callbacks for service binding, passed to bindService()  */
-    private val connection = object : ServiceConnection {
-
-        override fun onServiceConnected(className: ComponentName, service: IBinder) {
-            // We've bound to LocalService, cast the IBinder and get LocalService instance
-            val binder = service as DataCollectionService.LocalBinder
-            mService = binder.getService()
-            mBound = true
-
-            // Listen to callbacks from the service
-            mService.setDataUpdateListener(this@MainActivity)
-        }
-
-        override fun onServiceDisconnected(arg0: ComponentName) {
-            mBound = false
-        }
+        return binding.root
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        setTheme(R.style.Theme_Nearow)
-        super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-        binding.root.keepScreenOn = true
+
+    /**
+     * Called immediately after [.onCreateView]
+     * has returned, but before any saved state has been restored in to the view.
+     * This gives subclasses a chance to initialize themselves once
+     * they know their view hierarchy has been completely created.  The fragment's
+     * view hierarchy is not however attached to its parent at this point.
+     * @param view The View returned by [.onCreateView].
+     * @param savedInstanceState If non-null, this fragment is being re-constructed
+     * from a previous saved state as given here.
+     */
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
 
         setupChart()
         setupBarChart()
 
-        strokeRateTextView = findViewById(R.id.stroke_rate)
+        strokeRateTextView = binding.root.findViewById(R.id.stroke_rate)
     }
 
     private fun setupChart() {
-        chart = findViewById(R.id.live_chart)
+        chart = binding.root.findViewById(R.id.live_chart)
 
         val data = LineData()
         data.setValueTextColor(Color.BLACK)
@@ -82,7 +67,7 @@ class MainActivity : AppCompatActivity(), DataProcessor.DataUpdateListener {
         val l: Legend = chart.legend
 
         // modify the legend ...
-        l.form = LegendForm.LINE
+        l.form = Legend.LegendForm.LINE
         l.textColor = Color.BLACK
 
         val xl: XAxis = chart.xAxis
@@ -101,45 +86,15 @@ class MainActivity : AppCompatActivity(), DataProcessor.DataUpdateListener {
     }
 
     private fun setupBarChart() {
-        barChart = findViewById(R.id.bar_chart)
+        barChart = binding.root.findViewById(R.id.bar_chart)
         val data = BarData()
         barChart.data = data
         chart.description.isEnabled = false
     }
 
-    override fun onResume() {
-        super.onResume()
-        startForegroundServiceForSensors(false)
-    }
-
-    private fun startForegroundServiceForSensors(background: Boolean) {
-        val dataCollectionServiceIntent = Intent(this, DataCollectionService::class.java)
-        dataCollectionServiceIntent.putExtra(DataCollectionService.KEY_BACKGROUND, background)
-        ContextCompat.startForegroundService(this, dataCollectionServiceIntent)
-    }
-
-    override fun onPause() {
-        super.onPause()
-        startForegroundServiceForSensors(true)
-    }
-
-    override fun onStart() {
-        super.onStart()
-        // Bind to LocalService
-        Intent(this, DataCollectionService::class.java).also { intent ->
-            bindService(intent, connection, Context.BIND_AUTO_CREATE)
-        }
-    }
-
-    override fun onStop() {
-        super.onStop()
-        unbindService(connection)
-        mBound = false
-    }
-
     private fun createSet(): LineDataSet {
         val set = LineDataSet(null, "Acceleration Magnitude (m/s²)")
-        set.axisDependency = AxisDependency.LEFT
+        set.axisDependency = YAxis.AxisDependency.LEFT
         set.color = ColorTemplate.getHoloBlue()
         set.lineWidth = 2f
         set.setDrawCircles(false)
@@ -191,25 +146,16 @@ class MainActivity : AppCompatActivity(), DataProcessor.DataUpdateListener {
         chart.moveViewToX(data.entryCount.toFloat())
     }
 
-
-    override fun onStrokeTaken(strokeEvent: StrokeEvent) {
-        strokeRateTextView.text = getString(
-            R.string.stroke_rate_display_placeholder_text,
-            strokeEvent.strokeRate,
-            strokeEvent.strokeRate
-        )
-    }
-
     override fun onNewAccelerationReading(reading: Double) {
         binding.accelerationReading.text = String.format("%.3f", reading)
         addEntry(reading.toFloat())
     }
 
-    override fun onStrokeRateUpdate(strokeRate: Double) {
+    override fun onStrokeRateUpdate(strokeRate: Double, accelerometerSamplingRate: Double) {
         strokeRateTextView.text = getString(
             R.string.stroke_rate_display_placeholder_text,
             strokeRate,
-            System.currentTimeMillis() / 1000.0
+            accelerometerSamplingRate
         )
     }
 

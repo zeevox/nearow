@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import io.objectbox.Box
 import net.zeevox.nearow.data.rate.Autocorrelator
+import net.zeevox.nearow.input.DataCollectionService
 import net.zeevox.nearow.model.DataRecord
 import kotlin.concurrent.fixedRateTimer
 import kotlin.random.Random
@@ -13,7 +14,7 @@ class DataProcessor(private val dataBox: Box<DataRecord>) {
 
     companion object {
         // rough estimate for sample rate
-        private const val SAMPLE_RATE = 50
+        private const val SAMPLE_RATE = 1000000 / DataCollectionService.ACCELEROMETER_SAMPLING_DELAY
 
         // roughly 50Hz sampling - max 10 second buffer -> 12spm min detection (Nyquist)
         // autocorrelation works best when the buffer size is a power of two
@@ -22,16 +23,22 @@ class DataProcessor(private val dataBox: Box<DataRecord>) {
         // smooth jumpy stroke rate -- take moving average of this period
         private const val STROKE_RATE_MOV_AVG_PERIOD = 3
 
+        // milliseconds between stroke rate recalculations
+        private const val STROKE_RATE_RECALCULATION_PERIOD = 1000L
+
+        // seconds to wait before starting stroke rate calculations
+        private const val STROKE_RATE_INITIAL_DELAY = 3000L
+
         // magic number determined empirically
+        // https://stackoverflow.com/a/1736623
         private const val FILTERING_FACTOR = 0.1
         private const val CONJUGATE_FILTERING_FACTOR = 1.0 - FILTERING_FACTOR
     }
 
     interface DataUpdateListener {
-        fun onStrokeTaken(strokeEvent: StrokeEvent)
         fun onNewAccelerationReading(reading: Double)
-        fun onStrokeRateUpdate(strokeRate: Double)
         fun onNewAutocorrelationTable(array: DoubleArray)
+        fun onStrokeRateUpdate(strokeRate: Double, accelerometerSamplingRate: Double)
     }
 
     private var listener: DataUpdateListener? = null
@@ -43,10 +50,11 @@ class DataProcessor(private val dataBox: Box<DataRecord>) {
     private val strokeRateCalculator = Thread {
         // after a three-second stabilisation period,
         // recalculate stroke rate roughly once per second
-        fixedRateTimer("strokeRateCalculator", false, 3L, 1000) {
+        fixedRateTimer("strokeRateCalculator", false, STROKE_RATE_INITIAL_DELAY, STROKE_RATE_RECALCULATION_PERIOD) {
             recalculateStrokeRate()
             // this alternate thread cannot alter UI elements so post the callback onto the main thread
-            Handler(Looper.getMainLooper()).post { listener?.onStrokeRateUpdate(strokeRate) }
+            // https://stackoverflow.com/a/56852228
+            Handler(Looper.getMainLooper()).post { listener?.onStrokeRateUpdate(strokeRate, accelerometerSamplingRate) }
         }
     }
 
