@@ -20,5 +20,13 @@ class Utils {
         fun magnitude(triple: DoubleArray): Double =
             sqrt(triple[0] * triple[0] + triple[1] * triple[1] + triple[2] * triple[2])
 
+        /**
+         * Convert a speed, measured in metres per second, into the number
+         * of seconds that would be required to cover 500m at this speed.
+         */
+        fun metersPerSecondToSecondsPer500(speed: Float): Float {
+            return 500 / speed
+        }
+
     }
 }

@@ -12,22 +12,22 @@ import com.github.mikephil.charting.components.XAxis
 import com.github.mikephil.charting.components.YAxis
 import com.github.mikephil.charting.data.*
 import com.github.mikephil.charting.utils.ColorTemplate
-import com.google.android.material.textview.MaterialTextView
 import net.zeevox.nearow.R
 import net.zeevox.nearow.databinding.FragmentStrokeRateDebuggerBinding
 
 class StrokeRateDebuggerFragment : BaseFragment() {
     lateinit var chart: LineChart
     lateinit var barChart: BarChart
-    lateinit var strokeRateTextView: MaterialTextView
 
-    private lateinit var binding: FragmentStrokeRateDebuggerBinding
+    private var _binding: FragmentStrokeRateDebuggerBinding? = null
+    private val binding get() = _binding!!
 
-    override fun onCreateView(inflater: LayoutInflater,
-                              container: ViewGroup?,
-                              savedInstanceState: Bundle?): View {
-        binding = FragmentStrokeRateDebuggerBinding.inflate(inflater, container, false)
-
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View {
+        _binding = FragmentStrokeRateDebuggerBinding.inflate(inflater, container, false)
         return binding.root
     }
 
@@ -47,12 +47,10 @@ class StrokeRateDebuggerFragment : BaseFragment() {
 
         setupChart()
         setupBarChart()
-
-        strokeRateTextView = binding.root.findViewById(R.id.stroke_rate)
     }
 
     private fun setupChart() {
-        chart = binding.root.findViewById(R.id.live_chart)
+        chart = binding.liveChart
 
         val data = LineData()
         data.setValueTextColor(Color.BLACK)
@@ -86,7 +84,7 @@ class StrokeRateDebuggerFragment : BaseFragment() {
     }
 
     private fun setupBarChart() {
-        barChart = binding.root.findViewById(R.id.bar_chart)
+        barChart = binding.barChart
         val data = BarData()
         barChart.data = data
         chart.description.isEnabled = false
@@ -151,12 +149,17 @@ class StrokeRateDebuggerFragment : BaseFragment() {
         addEntry(reading.toFloat())
     }
 
-    override fun onStrokeRateUpdate(strokeRate: Double, accelerometerSamplingRate: Double) {
-        strokeRateTextView.text = getString(
+    override fun onStrokeRateUpdate(strokeRate: Double) {
+        binding.strokeRate.text = getString(
             R.string.stroke_rate_display_placeholder_text,
             strokeRate,
-            accelerometerSamplingRate
+            0.0
         )
+    }
+
+    override fun onLocationUpdate(speed: Float, totalDistance: Float) {
+        // stroke rate debugger does not care about location
+        return
     }
 
     override fun onNewAutocorrelationTable(array: DoubleArray) {

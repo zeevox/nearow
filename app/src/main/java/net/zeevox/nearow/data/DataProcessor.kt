@@ -3,14 +3,15 @@ package net.zeevox.nearow.data
 import android.location.Location
 import android.os.Handler
 import android.os.Looper
-import io.objectbox.Box
+import androidx.annotation.UiThread
+import androidx.annotation.WorkerThread
+import net.zeevox.nearow.BuildConfig
 import net.zeevox.nearow.data.rate.Autocorrelator
 import net.zeevox.nearow.input.DataCollectionService
-import net.zeevox.nearow.model.DataRecord
 import kotlin.concurrent.fixedRateTimer
 import kotlin.random.Random
 
-class DataProcessor(private val dataBox: Box<DataRecord>) {
+class DataProcessor {
 
     companion object {
         // rough estimate for sample rate
@@ -36,9 +37,28 @@ class DataProcessor(private val dataBox: Box<DataRecord>) {
     }
 
     interface DataUpdateListener {
-        fun onNewAccelerationReading(reading: Double)
-        fun onNewAutocorrelationTable(array: DoubleArray)
-        fun onStrokeRateUpdate(strokeRate: Double, accelerometerSamplingRate: Double)
+        @UiThread
+        fun onNewAccelerationReading(reading: Double) {
+        }
+
+        @UiThread
+        fun onNewAutocorrelationTable(array: DoubleArray) {
+        }
+
+        /**
+         * Called when stroke rate is recalculated
+         * [strokeRate] - estimated rate in strokes per minute
+         */
+        @UiThread
+        fun onStrokeRateUpdate(strokeRate: Double)
+
+        /**
+         * Called when a new GPS fix is obtained
+         * [speed] - speed in metres per second
+         * [totalDistance] - new total distance travelled
+         */
+        @UiThread
+        fun onLocationUpdate(speed: Float, totalDistance: Float)
     }
 
     private var listener: DataUpdateListener? = null
@@ -50,11 +70,18 @@ class DataProcessor(private val dataBox: Box<DataRecord>) {
     private val strokeRateCalculator = Thread {
         // after a three-second stabilisation period,
         // recalculate stroke rate roughly once per second
-        fixedRateTimer("strokeRateCalculator", false, STROKE_RATE_INITIAL_DELAY, STROKE_RATE_RECALCULATION_PERIOD) {
+        fixedRateTimer(
+            "strokeRateCalculator",
+            false,
+            STROKE_RATE_INITIAL_DELAY,
+            STROKE_RATE_RECALCULATION_PERIOD
+        ) {
             recalculateStrokeRate()
             // this alternate thread cannot alter UI elements so post the callback onto the main thread
             // https://stackoverflow.com/a/56852228
-            Handler(Looper.getMainLooper()).post { listener?.onStrokeRateUpdate(strokeRate, accelerometerSamplingRate) }
+            Handler(Looper.getMainLooper()).post {
+                listener?.onStrokeRateUpdate(strokeRate)
+            }
         }
     }
 
@@ -69,11 +96,15 @@ class DataProcessor(private val dataBox: Box<DataRecord>) {
     // store last few stroke rate values for smoothing
     private val recentStrokeRates = CircularDoubleBuffer(STROKE_RATE_MOV_AVG_PERIOD)
 
-    val strokeRate : Double
+    private val strokeRate: Double
         get() = recentStrokeRates.average()
 
     // store last acceleration reading for ramping
     private val lastAccelReading = DoubleArray(3)
+
+    private lateinit var lastLocation: Location
+
+    private var totalDistance: Float = 0f
 
     private val startTimestamp = System.currentTimeMillis()
 
@@ -96,15 +127,28 @@ class DataProcessor(private val dataBox: Box<DataRecord>) {
         // store the corresponding timestamp as well
         timestamps.addLast(((System.currentTimeMillis() - startTimestamp) / 1000L).toDouble())
 
-        // let our listener know that a reading has come in
-        listener?.onNewAccelerationReading(magnitude)
+        // let our debug listener know that a reading has come in
+        if (BuildConfig.DEBUG)
+            listener?.onNewAccelerationReading(magnitude)
 
         // save current readings into memory for when next readings come in
         System.arraycopy(filtered, 0, lastAccelReading, 0, 3)
     }
 
+    /**
+     * Called when a new GPS measurement comes in.
+     * This subroutine stores this measurement in the database
+     * and informs any UI listener of this new measurement
+     */
     fun addGpsReading(location: Location) {
+        // sum total distance travelled
+        if (this::lastLocation.isInitialized) totalDistance += location.distanceTo(lastLocation)
 
+        // inform our listener of a new GPS location
+        listener?.onLocationUpdate(location.speed, totalDistance)
+
+        // save this for calculating the distance travelled when next GPS measurement comes in
+        lastLocation = location
     }
 
     /**
@@ -121,9 +165,15 @@ class DataProcessor(private val dataBox: Box<DataRecord>) {
         else 60.0 / samplesPerStroke * accelerometerSamplingRate
 
 
+    @WorkerThread
     private fun recalculateStrokeRate(): Double {
         val frequencyScores = Autocorrelator.getFrequencyScores(accelReadings)
-        listener?.onNewAutocorrelationTable(frequencyScores)
+
+        // for debug purposes - post the table with scores for each frequency
+        // this is to visualise which stroke rates are being selected as most probable
+        if (BuildConfig.DEBUG) Handler(Looper.getMainLooper()).post {
+            listener?.onNewAutocorrelationTable(frequencyScores)
+        }
 
         val strokeRate = samplesCountToFrequency(
             Autocorrelator.getBestFrequency(

@@ -13,18 +13,17 @@ import android.hardware.SensorManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
-import android.net.wifi.p2p.WifiP2pManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
+import androidx.annotation.RequiresApi
+import androidx.annotation.RequiresPermission
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
-import io.objectbox.Box
 import net.zeevox.nearow.R
 import net.zeevox.nearow.data.DataProcessor
-import net.zeevox.nearow.model.DataRecord
-import net.zeevox.nearow.model.MyObjectBox
 import net.zeevox.nearow.ui.MainActivity
 
 // initially based on https://www.raywenderlich.com/10838302-sensors-tutorial-for-android-getting-started
@@ -34,7 +33,10 @@ class DataCollectionService : Service(), SensorEventListener, LocationListener {
     private lateinit var sensorManager: SensorManager
     private lateinit var locationManager: LocationManager
 
-    private var background = false
+    // service config flags of sorts
+    private var showNotification = false
+    private var gpsEnabled = true
+
     private val notificationActivityRequestCode = 0
     private val notificationId = 1
     private val notificationStopRequestCode = 2
@@ -42,11 +44,12 @@ class DataCollectionService : Service(), SensorEventListener, LocationListener {
     private lateinit var dataProcessor: DataProcessor
 
     private val dataProcessingThread = Thread {
-        dataProcessor = DataProcessor(box)
+        dataProcessor = DataProcessor()
     }
 
     companion object {
-        const val KEY_BACKGROUND = "background"
+        const val KEY_SHOW_NOTIFICATION = "background"
+        const val KEY_ENABLE_GPS = "enable_gps"
         const val KEY_NOTIFICATION_ID = "notificationId"
         const val KEY_NOTIFICATION_STOP_ACTION = "net.zeevox.nearow.NOTIFICATION_STOP"
 
@@ -71,28 +74,36 @@ class DataCollectionService : Service(), SensorEventListener, LocationListener {
     fun setDataUpdateListener(listener: DataProcessor.DataUpdateListener) =
         dataProcessor.setListener(listener)
 
-    // ObjectBox was chosen because of the below
-    // https://proandroiddev.com/android-databases-performance-crud-a963dd7bb0eb
-    // ref https://github.com/objectbox/objectbox-java
-    private lateinit var box: Box<DataRecord>
-
     override fun onCreate() {
         super.onCreate()
 
-        initialiseDataProcessor()
+        Log.d(javaClass.simpleName, "Starting Nero data collection service...")
 
-        registerSensorListener()
-        registerGpsListener()
+        // start the data processing thread now so that it is ready to
+        // receive sensor and GPS values before they start coming in
+        dataProcessingThread.start().also {
+            // physical sensor data is not permission-protected so no need to check
+            registerSensorListener()
+
+            // measuring GPS is neither always needed (e.g. erg) nor permitted by user
+            // check that access has been granted to the user's geolocation before starting gps collection
+            if (ActivityCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED ||
+                ActivityCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED
+            ) gpsEnabled = false
+
+            // if gpsEnabled still true after permission check and user
+            // selection, request GPS location updates from the system
+            if (gpsEnabled) registerGpsListener()
+        }
 
         val notification = createNotification()
         startForeground(notificationId, notification)
-    }
-
-    private fun initialiseDataProcessor() {
-        val boxStore = MyObjectBox.builder().androidContext(this@DataCollectionService).build()
-        box = boxStore.boxFor(DataRecord::class.java)
-
-        dataProcessingThread.start()
     }
 
     private fun registerSensorListener() {
@@ -106,26 +117,17 @@ class DataCollectionService : Service(), SensorEventListener, LocationListener {
         }
     }
 
+    // https://developer.android.com/studio/write/annotations#permissions
+    @RequiresPermission(
+        allOf = [
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        ]
+    )
     private fun registerGpsListener() {
-        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        Log.d(javaClass.simpleName, "Requesting GPS location updates")
 
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return
-        }
+        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
         locationManager.requestLocationUpdates(
             LocationManager.GPS_PROVIDER,
@@ -136,7 +138,10 @@ class DataCollectionService : Service(), SensorEventListener, LocationListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        intent?.let { background = it.getBooleanExtra(KEY_BACKGROUND, false) }
+        intent?.let {
+            showNotification = it.getBooleanExtra(KEY_SHOW_NOTIFICATION, false)
+            gpsEnabled = it.getBooleanExtra(KEY_ENABLE_GPS, true)
+        }
         return START_STICKY
     }
 
@@ -147,8 +152,7 @@ class DataCollectionService : Service(), SensorEventListener, LocationListener {
             Sensor.TYPE_LINEAR_ACCELERATION -> dataProcessor.addAccelerometerReading(event.values)
         }
 
-
-        if (background) {
+        if (showNotification) {
             val notification = createNotification()
             startForeground(notificationId, notification)
         } else stopForeground(true)
@@ -158,27 +162,33 @@ class DataCollectionService : Service(), SensorEventListener, LocationListener {
         // TODO accuracy handling?
     }
 
-    private fun createNotification(): Notification {
-
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun createNotificationChannel() {
         val notificationManager =
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // Notifications channel required for Android 8.0+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notificationChannel = NotificationChannel(
-                application.packageName,
-                getString(R.string.notification_channel_tracking_service),
-                NotificationManager.IMPORTANCE_DEFAULT
-            )
+        val notificationChannel = NotificationChannel(
+            application.packageName,
+            getString(R.string.notification_channel_tracking_service),
+            NotificationManager.IMPORTANCE_MIN
+        )
 
-            // Configure the notification channel.
-            notificationChannel.enableLights(false)
-            notificationChannel.setSound(null, null)
-            notificationChannel.enableVibration(false)
-            notificationChannel.vibrationPattern = longArrayOf(0L)
-            notificationChannel.setShowBadge(false)
-            notificationManager.createNotificationChannel(notificationChannel)
+        // Configure the notification channel.
+        notificationChannel.apply {
+            enableLights(false)
+            setSound(null, null)
+            enableVibration(false)
+            vibrationPattern = longArrayOf(0L)
+            setShowBadge(false)
         }
+
+        notificationManager.createNotificationChannel(notificationChannel)
+    }
+
+    private fun createNotification(): Notification {
+        // Notifications channel required for Android 8.0+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            createNotificationChannel()
 
         val notificationBuilder = NotificationCompat.Builder(baseContext, application.packageName)
         // Open activity intent
@@ -187,13 +197,13 @@ class DataCollectionService : Service(), SensorEventListener, LocationListener {
             notificationActivityRequestCode,
             Intent(this, MainActivity::class.java),
             // https://stackoverflow.com/a/67046334
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            } else PendingIntent.FLAG_UPDATE_CURRENT
+            else PendingIntent.FLAG_UPDATE_CURRENT
         )
 
         // Stop notification intent
-        val stopNotificationIntent = Intent(this, WifiP2pManager.ActionListener::class.java)
+        val stopNotificationIntent = Intent(this, ActionListener::class.java)
         stopNotificationIntent.action = KEY_NOTIFICATION_STOP_ACTION
         stopNotificationIntent.putExtra(KEY_NOTIFICATION_ID, notificationId)
         val pendingStopNotificationIntent =
@@ -201,9 +211,9 @@ class DataCollectionService : Service(), SensorEventListener, LocationListener {
                 this,
                 notificationStopRequestCode,
                 stopNotificationIntent,
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                } else PendingIntent.FLAG_UPDATE_CURRENT
+                else PendingIntent.FLAG_UPDATE_CURRENT
             )
 
         notificationBuilder.setAutoCancel(true)
@@ -221,7 +231,6 @@ class DataCollectionService : Service(), SensorEventListener, LocationListener {
                 getString(R.string.stop_notifications),
                 pendingStopNotificationIntent
             )
-
 
         return notificationBuilder.build()
     }
@@ -269,5 +278,13 @@ class DataCollectionService : Service(), SensorEventListener, LocationListener {
      * @param location the updated location
      */
     override fun onLocationChanged(location: Location) = dataProcessor.addGpsReading(location)
+
+    fun showNotification() {
+        showNotification = true
+    }
+
+    fun hideNotification() {
+        showNotification = false
+    }
 
 }

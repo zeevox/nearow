@@ -13,9 +13,7 @@ package net.zeevox.nearow.output
 ////////////////////////////////////////////////////////////////////////////////
 
 import com.garmin.fit.*
-import io.objectbox.Box
 import net.zeevox.nearow.BuildConfig
-import net.zeevox.nearow.model.DataRecord
 import java.util.*
 import java.util.TimeZone
 import kotlin.math.abs
@@ -60,15 +58,16 @@ class FitFileExporter {
             return developerIdMesg
         }
 
-        fun createTimeBasedActivity(filename: String, accelBox: Box<DataRecord>) {
+        fun createTimeBasedActivity(filename: String) {
             val twoPI = Math.PI * 2.0
             val semiCirclesPerMeter = 107.173
             val messages: MutableList<Mesg> = ArrayList()
 
-            val firstReading = accelBox[0]
+            // TODO
+            val firstReading = 0L
 
             // The starting timestamp for the activity
-            val startTime = DateTime(firstReading.timestampMillis)
+            val startTime = DateTime(firstReading)
 
             // Timer Events are a BEST PRACTICE for FIT ACTIVITY files
             val eventMesg = EventMesg()

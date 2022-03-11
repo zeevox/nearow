@@ -10,4 +10,11 @@
     <string name="notification_background_service_running">Activity tracking in progress</string>
     <string name="notification_channel_tracking_service">Tracking service</string>
     <string name="stroke_rate_display_placeholder_text" formatted="false">"%1$.1f\n%2$.2f"</string>
+    <string name="action_start_tracking">Start tracking</string>
+    <string name="units_pace_500">/500m</string>
+    <string name="units_metres">m</string>
+    <string name="units_strokes_per_minute">spm</string>
+    <string name="action_stop_tracking">Stop tracking</string>
+    <string name="dialog_msg_gps_permission_denied">Because GPS location permission has been denied, GPS tracking is not possible. Only stroke rate will be collected.</string>
+    <string name="dialog_title_gps_permission_denied">Location access denied</string>
 </resources>
