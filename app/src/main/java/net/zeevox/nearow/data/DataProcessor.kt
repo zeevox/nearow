@@ -9,6 +9,7 @@ import net.zeevox.nearow.BuildConfig
 import net.zeevox.nearow.data.rate.Autocorrelator
 import net.zeevox.nearow.input.DataCollectionService
 import kotlin.concurrent.fixedRateTimer
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 class DataProcessor {
@@ -19,7 +20,7 @@ class DataProcessor {
 
         // roughly 50Hz sampling - max 10 second buffer -> 12spm min detection (Nyquist)
         // autocorrelation works best when the buffer size is a power of two
-        private val ACCEL_BUFFER_SIZE = Utils.nextPowerOf2(SAMPLE_RATE * 10)
+        private val ACCEL_BUFFER_SIZE = nextPowerOf2(SAMPLE_RATE * 10)
 
         // smooth jumpy stroke rate -- take moving average of this period
         private const val STROKE_RATE_MOV_AVG_PERIOD = 3
@@ -34,6 +35,22 @@ class DataProcessor {
         // https://stackoverflow.com/a/1736623
         private const val FILTERING_FACTOR = 0.1
         private const val CONJUGATE_FILTERING_FACTOR = 1.0 - FILTERING_FACTOR
+
+        /**
+         * Return smallest power of two greater than or equal to n
+         */
+        private fun nextPowerOf2(n: Int): Int {
+            // base case already power of 2
+            if (n > 0 && n and n - 1 == 0) return n
+
+            // increment through powers of two until find one larger than n
+            var p = 1
+            while (p < n) p = p shl 1
+            return p
+        }
+
+        fun magnitude(triple: DoubleArray): Double =
+            sqrt(triple[0] * triple[0] + triple[1] * triple[1] + triple[2] * triple[2])
     }
 
     interface DataUpdateListener {
@@ -119,7 +136,7 @@ class DataProcessor {
             DoubleArray(3) { readings[it] * FILTERING_FACTOR + lastAccelReading[it] * CONJUGATE_FILTERING_FACTOR }
 
         // calculate magnitude of the acceleration
-        val magnitude = Utils.magnitude(filtered)
+        val magnitude = magnitude(filtered)
 
         // add the acceleration reading to the end of the buffer; displace an old value
         accelReadings.addLast(magnitude)

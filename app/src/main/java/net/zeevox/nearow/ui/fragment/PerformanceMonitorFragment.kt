@@ -8,7 +8,6 @@ import android.view.ViewGroup
 import androidx.core.content.res.ResourcesCompat
 import hallianinc.opensource.timecounter.StopWatch
 import net.zeevox.nearow.R
-import net.zeevox.nearow.data.Utils
 import net.zeevox.nearow.databinding.FragmentPerformanceTrackerBinding
 
 class PerformanceMonitorFragment : BaseFragment() {
@@ -68,6 +67,15 @@ class PerformanceMonitorFragment : BaseFragment() {
         binding.strokeRate.text = String.format("%.1f", strokeRate)
     }
 
+
+    /**
+     * Convert a speed, measured in metres per second, into the number
+     * of seconds that would be required to cover 500m at this speed.
+     */
+    fun metersPerSecondToSecondsPer500(speed: Float): Float {
+        return 500 / speed
+    }
+
     /**
      * Called when a new GPS fix is obtained
      * [speed] - speed in metres per second
@@ -77,7 +85,7 @@ class PerformanceMonitorFragment : BaseFragment() {
         Log.d(javaClass.simpleName, "Received new location update")
         binding.splitFrame.visibility = View.VISIBLE
         binding.distanceFrame.visibility = View.VISIBLE
-        binding.split.text = Utils.metersPerSecondToSecondsPer500(speed).toString()
+        binding.split.text = metersPerSecondToSecondsPer500(speed).toString()
         binding.distance.text = String.format("%.0f", totalDistance)
     }
 }
