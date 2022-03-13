@@ -57,7 +57,15 @@ dependencies {
     // downloaded from https://developer.garmin.com/fit/download/
     // added with https://stackoverflow.com/a/35241990
     implementation files('libs/fit.jar')
-    implementation 'com.google.android.gms:play-services-location:18.0.0'
+
+    // For getting user's GPS location (new best practice method)
+    implementation 'com.google.android.gms:play-services-location:19.0.1'
+
+    // Android room is built on top of SQL, use it as a database
+    // https://developer.android.com/training/data-storage/room
+    implementation "androidx.room:room-runtime:2.4.2"
+    kapt "androidx.room:room-compiler:2.4.2"
+    implementation "androidx.room:room-ktx:2.4.2"
 
     // Testing functionality
     testImplementation 'junit:junit:4.13.2'

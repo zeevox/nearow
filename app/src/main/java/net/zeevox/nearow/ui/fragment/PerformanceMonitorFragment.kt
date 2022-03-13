@@ -1,5 +1,6 @@
 package net.zeevox.nearow.ui.fragment
 
+import android.location.Location
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -78,14 +79,12 @@ class PerformanceMonitorFragment : BaseFragment() {
 
     /**
      * Called when a new GPS fix is obtained
-     * [speed] - speed in metres per second
-     * [totalDistance] - new total distance travelled
      */
-    override fun onLocationUpdate(speed: Float, totalDistance: Float) {
+    override fun onLocationUpdate(location: Location, totalDistance: Float) {
         Log.d(javaClass.simpleName, "Received new location update")
         binding.splitFrame.visibility = View.VISIBLE
         binding.distanceFrame.visibility = View.VISIBLE
-        binding.split.text = metersPerSecondToSecondsPer500(speed).toString()
+        binding.split.text = metersPerSecondToSecondsPer500(location.speed).toString()
         binding.distance.text = String.format("%.0f", totalDistance)
     }
 }

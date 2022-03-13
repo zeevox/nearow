@@ -21,6 +21,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.location.*
 import net.zeevox.nearow.data.DataProcessor
+import net.zeevox.nearow.db.TrackDatabase
 
 
 // initially based on https://www.raywenderlich.com/10838302-sensors-tutorial-for-android-getting-started
@@ -30,6 +31,8 @@ class DataCollectionService : Service(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
 
     private lateinit var mNotificationAdministrator: NotificationAdministrator
+
+    private lateinit var db: TrackDatabase
 
     // service config flags of sorts
     private var showNotification = false
@@ -114,7 +117,7 @@ class DataCollectionService : Service(), SensorEventListener {
         // start the data processor before registering sensor and GPS
         // listeners so that it is ready to receive values as soon as
         // they start coming in.
-        dataProcessor = DataProcessor().also {
+        dataProcessor = DataProcessor(applicationContext).also {
             // physical sensor data is not permission-protected so no need to check
             registerSensorListener()
 

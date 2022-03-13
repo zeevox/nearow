@@ -1,6 +1,7 @@
 package net.zeevox.nearow.ui.fragment
 
 import android.graphics.Color
+import android.location.Location
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -157,7 +158,7 @@ class StrokeRateDebuggerFragment : BaseFragment() {
         )
     }
 
-    override fun onLocationUpdate(speed: Float, totalDistance: Float) {
+    override fun onLocationUpdate(location: Location, totalDistance: Float) {
         // stroke rate debugger does not care about location
         return
     }

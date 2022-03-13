@@ -1,18 +1,23 @@
 package net.zeevox.nearow.data
 
+import android.content.Context
 import android.location.Location
 import android.os.Handler
 import android.os.Looper
 import androidx.annotation.UiThread
 import androidx.annotation.WorkerThread
+import androidx.room.Room
+import kotlinx.coroutines.*
 import net.zeevox.nearow.BuildConfig
 import net.zeevox.nearow.data.rate.Autocorrelator
+import net.zeevox.nearow.db.TrackDatabase
+import net.zeevox.nearow.db.model.TrackDao
+import net.zeevox.nearow.db.model.TrackPoint
 import net.zeevox.nearow.input.DataCollectionService
-import kotlin.concurrent.fixedRateTimer
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-class DataProcessor {
+class DataProcessor(applicationContext: Context) {
 
     companion object {
         // rough estimate for sample rate
@@ -35,6 +40,8 @@ class DataProcessor {
         // https://stackoverflow.com/a/1736623
         private const val FILTERING_FACTOR = 0.1
         private const val CONJUGATE_FILTERING_FACTOR = 1.0 - FILTERING_FACTOR
+
+        private const val DATABASE_NAME = "nearow"
 
         /**
          * Return smallest power of two greater than or equal to n
@@ -71,36 +78,74 @@ class DataProcessor {
 
         /**
          * Called when a new GPS fix is obtained
-         * [speed] - speed in metres per second
+         * [location] - [Location] with all available GPS data
          * [totalDistance] - new total distance travelled
          */
         @UiThread
-        fun onLocationUpdate(speed: Float, totalDistance: Float)
+        fun onLocationUpdate(location: Location, totalDistance: Float)
     }
 
     private var listener: DataUpdateListener? = null
+
+    /**
+     * The application database
+     */
+    private val db: TrackDatabase = Room.databaseBuilder(
+        applicationContext,
+        TrackDatabase::class.java, DATABASE_NAME
+    ).build()
+
+    /**
+     * Interface with the table where individual rate-location records are stored
+     */
+    private val track: TrackDao = db.trackDao()
+
+    /**
+     * Increment sessionId each time a new rowing session is started
+     * Getting the session ID is expected to be a very quick function
+     * call so we can afford to run it as a blocking function
+     */
+    private val currentSessionId: Int = runBlocking { getNewSessionId() }
+
+    /**
+     * Check database for existing sessions. The new session ID is
+     * auto-incremented from the last recorded session. In case this
+     * is the first recorded session, the ID returned is 1.
+     */
+    private suspend fun getNewSessionId(): Int = coroutineScope {
+        val sessionId = async(Dispatchers.IO) { (track.getLastSessionId() ?: 0) + 1 }
+        sessionId.await()
+    }
+
+    /**
+     * Perform CPU-intensive tasks on the `Default` coroutine scope
+     */
+    private val scope = CoroutineScope(Dispatchers.Default)
 
     fun setListener(listener: DataUpdateListener) {
         this.listener = listener
     }
 
-    private val strokeRateCalculator = Thread {
-        // after a three-second stabilisation period,
-        // recalculate stroke rate roughly once per second
-        fixedRateTimer(
-            "strokeRateCalculator",
-            false,
-            STROKE_RATE_INITIAL_DELAY,
-            STROKE_RATE_RECALCULATION_PERIOD
-        ) {
-            recalculateStrokeRate()
-            // this alternate thread cannot alter UI elements so post the callback onto the main thread
-            // https://stackoverflow.com/a/56852228
-            Handler(Looper.getMainLooper()).post {
-                listener?.onStrokeRateUpdate(strokeRate)
+    private val strokeRateCalculator: Job =
+        scope.launch {
+            // after a three-second stabilisation period
+            delay(STROKE_RATE_INITIAL_DELAY)
+            // recalculate stroke rate roughly once per second
+            while (true) {
+                // check that coroutine scope has not requested a shutdown
+                ensureActive()
+
+                getCurrentStrokeRate()
+
+                // this alternate thread cannot alter UI elements so post the callback onto the main thread
+                // https://stackoverflow.com/a/56852228
+                Handler(Looper.getMainLooper()).post {
+                    listener?.onStrokeRateUpdate(smoothedStrokeRate)
+                }
+
+                delay(STROKE_RATE_RECALCULATION_PERIOD)
             }
         }
-    }
 
     // somewhere to store acceleration readings
     private val accelReadings =
@@ -113,20 +158,20 @@ class DataProcessor {
     // store last few stroke rate values for smoothing
     private val recentStrokeRates = CircularDoubleBuffer(STROKE_RATE_MOV_AVG_PERIOD)
 
-    private val strokeRate: Double
+    private val smoothedStrokeRate: Double
         get() = recentStrokeRates.average()
 
     // store last acceleration reading for ramping
     private val lastAccelReading = DoubleArray(3)
 
-    private lateinit var lastLocation: Location
+    private lateinit var mLocation: Location
 
     private var totalDistance: Float = 0f
 
     private val startTimestamp = System.currentTimeMillis()
 
     init {
-        // calculate the stroke rate on another thread to not slow down the GUI
+        // calculate the stroke rate in coroutine scope to not block UI
         strokeRateCalculator.start()
     }
 
@@ -159,13 +204,13 @@ class DataProcessor {
      */
     fun addGpsReading(location: Location) {
         // sum total distance travelled
-        if (this::lastLocation.isInitialized) totalDistance += location.distanceTo(lastLocation)
+        if (this::mLocation.isInitialized) totalDistance += location.distanceTo(mLocation)
 
         // inform our listener of a new GPS location
-        listener?.onLocationUpdate(location.speed, totalDistance)
+        listener?.onLocationUpdate(location, totalDistance)
 
         // save this for calculating the distance travelled when next GPS measurement comes in
-        lastLocation = location
+        mLocation = location
     }
 
     /**
@@ -183,7 +228,7 @@ class DataProcessor {
 
 
     @WorkerThread
-    private fun recalculateStrokeRate(): Double {
+    private suspend fun getCurrentStrokeRate(): Double {
         val frequencyScores = Autocorrelator.getFrequencyScores(accelReadings)
 
         // for debug purposes - post the table with scores for each frequency
@@ -192,14 +237,27 @@ class DataProcessor {
             listener?.onNewAutocorrelationTable(frequencyScores)
         }
 
-        val strokeRate = samplesCountToFrequency(
+        val currentStrokeRate = samplesCountToFrequency(
             Autocorrelator.getBestFrequency(
                 frequencyScores,
                 accelerometerSamplingRate.toInt() // no more than 60 spm
             )
         )
 
-        recentStrokeRates.addLast(strokeRate)
-        return strokeRate
+        recentStrokeRates.addLast(currentStrokeRate)
+
+        // save into the database
+        track.insert(
+            TrackPoint(
+                currentSessionId,
+                System.currentTimeMillis(),
+                smoothedStrokeRate,
+                mLocation.latitude,
+                mLocation.longitude,
+                mLocation.speed
+            )
+        )
+
+        return currentStrokeRate
     }
 }
