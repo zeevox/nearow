@@ -12,18 +12,135 @@ package net.zeevox.nearow.output
 // Copyright 2021 Garmin International, Inc.
 ////////////////////////////////////////////////////////////////////////////////
 
+import android.content.Context
+import android.util.Log
+import androidx.annotation.NonNull
 import com.garmin.fit.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import net.zeevox.nearow.BuildConfig
+import net.zeevox.nearow.db.model.TrackPoint
+import net.zeevox.nearow.utils.UnitConverter
+import java.text.SimpleDateFormat
 import java.util.*
 import java.util.TimeZone
-import kotlin.math.abs
-import kotlin.math.roundToInt
-import kotlin.math.sin
 
+class FitFileExporter(private val context: Context) {
 
-class FitFileExporter {
+    suspend fun exportTrackPoints(trackPoints: List<TrackPoint>): java.io.File {
+        val activity = createActivityFromTrackPoints(trackPoints)
+
+        // create directory if not exists
+        val directory = java.io.File(context.filesDir.path + "/exports")
+        if (!directory.exists()) directory.mkdir()
+
+        val file =
+            java.io.File(directory, getFilenameForTimestamp(trackPoints.first().timestamp))
+        writeMessagesToFile(activity, file)
+        return file
+    }
+
+    private fun createActivityFromTrackPoints(trackPoints: List<TrackPoint>): List<Mesg> {
+        val messages: MutableList<Mesg> = mutableListOf()
+
+        // The starting timestamp for the activity
+        val activityStartTime = DateTime(trackPoints.first().timestamp)
+        val activityEndTime = DateTime(trackPoints.last().timestamp)
+
+        val elapsedTime = (activityEndTime.timestamp - activityStartTime.timestamp).toFloat()
+
+        // Every FIT file MUST contain a File ID message
+        messages.add(getFileMetadata(activityStartTime))
+
+        // A Device Info message is a BEST PRACTICE for FIT ACTIVITY files
+        messages.add(getDeviceInfo(activityStartTime))
+
+        // record the developer ID message into the FIT file
+        messages.add(getDeveloperMetadata())
+
+        // Timer Events are a BEST PRACTICE for FIT ACTIVITY files
+        val eventMesg: EventMesg = EventMesg().apply {
+            timestamp = activityStartTime
+            event = Event.TIMER
+            eventType = EventType.START
+        }
+        messages.add(eventMesg)
+
+        /** Create a [RecordMesg] for each [TrackPoint] and write to the output stream **/
+        for (trackPoint in trackPoints)
+            messages.add(RecordMesg().apply {
+                timestamp = DateTime(trackPoint.timestamp)
+                speed = trackPoint.speed
+                power = UnitConverter.speedToWatts(speed).toInt()
+                cadence256 = trackPoint.strokeRate.toFloat()
+                trackPoint.latitude?.let { positionLat = decimalToGarmin(it) }
+                trackPoint.longitude?.let { positionLong = decimalToGarmin(it) }
+            })
+
+        // mark the activity as ended
+        messages.add(createEndEvent(activityEndTime))
+
+        // Every FIT file MUST contain at least one Lap message
+        messages.add(createLap(activityStartTime, elapsedTime))
+
+        // Every FIT file MUST contain at least one Session message
+        messages.add(createSession(activityStartTime, elapsedTime))
+
+        // Every FIT ACTIVITY file MUST contain EXACTLY one Activity message
+        val timeZone: TimeZone = TimeZone.getTimeZone("America/Denver")
+        val timezoneOffset: Long = (timeZone.rawOffset + timeZone.dstSavings) / 1000L
+        messages.add(ActivityMesg().apply {
+            timestamp = activityStartTime
+            numSessions = 1
+            localTimestamp = activityStartTime.timestamp + timezoneOffset
+            totalTimerTime =
+                (activityStartTime.timestamp - activityStartTime.timestamp).toFloat()
+        })
+
+        return messages
+    }
+
+    private suspend fun writeMessagesToFile(messages: List<Mesg?>, file: java.io.File) {
+        // Create the output stream
+        val encoder: FileEncoder = try {
+            FileEncoder(file, Fit.ProtocolVersion.V2_0)
+        } catch (e: FitRuntimeException) {
+            Log.e(javaClass.simpleName, "Error opening file ${file.name}")
+            e.printStackTrace()
+            return
+        }
+
+        withContext(Dispatchers.IO) { for (message in messages) encoder.write(message) }
+
+        // Close the output stream
+        try {
+            encoder.close()
+        } catch (e: FitRuntimeException) {
+            Log.e(javaClass.simpleName, "Error closing encode.")
+            e.printStackTrace()
+            return
+        }
+
+        Log.d(javaClass.simpleName, "Encoded FIT Activity file ${file.name}")
+    }
+
 
     companion object {
+
+        // The combination of manufacturer id, product id, and serial number should be unique.
+        // When available, a non-random serial number should be used.
+        private const val TRACKING_PRODUCT_ID: Int = 1
+        private const val TRACKING_PRODUCT_NAME: String = "Nero"
+        private const val MANUFACTURER_ID: Int = Manufacturer.DEVELOPMENT
+        private const val SOFTWARE_VERSION = BuildConfig.VERSION_CODE
+        private val SERIAL_NUMBER: Long = Random().nextLong()
+
+        /**
+         * Garmin stores lat/long as integers.
+         * Each decimal degree represents 2^32 / 360 = 11930465
+         * https://gis.stackexchange.com/a/368905
+         */
+        fun decimalToGarmin(pos: Double): Int = (pos * 11930465).toInt()
 
         private fun getDeveloperMetadata(): DeveloperDataIdMesg {
             // Create the Developer Id message for the developer data fields.
@@ -31,203 +148,106 @@ class FitFileExporter {
 
             // It is a BEST PRACTICE to reuse the same Guid for all FIT files created by a single application
             // Randomly generated GUID of BADA3A1E-E9E2-44F3-920B-B38C88963ADF in byte array form
-            val appId = arrayOf(
-                0xBA.toByte(),
-                0xDA.toByte(),
+            val appId: Array<Int> = arrayOf(
+                0xBA,
+                0xDA,
                 0x3A,
                 0x1E,
-                0xE9.toByte(),
-                0xE2.toByte(),
+                0xE9,
+                0xE2,
                 0x44,
-                0xF3.toByte(),
-                0x92.toByte(),
+                0xF3,
+                0x92,
                 0x0B,
-                0xB3.toByte(),
-                0x8C.toByte(),
-                0x88.toByte(),
-                0x96.toByte(),
+                0xB3,
+                0x8C,
+                0x88,
+                0x96,
                 0x3A,
-                0xDF.toByte()
+                0xDF
             )
 
-            appId.forEachIndexed { index, value -> developerIdMesg.setApplicationId(index, value) }
+            appId.forEachIndexed { index, value ->
+                developerIdMesg.setApplicationId(
+                    index,
+                    value.toByte()
+                )
+            }
 
-            developerIdMesg.developerDataIndex = 0.toShort()
-            developerIdMesg.applicationVersion = BuildConfig.VERSION_CODE.toLong()
+            developerIdMesg.apply {
+                developerDataIndex = 0.toShort()
+                applicationVersion = SOFTWARE_VERSION.toLong()
+            }
 
             return developerIdMesg
         }
 
-        fun createTimeBasedActivity(filename: String) {
-            val twoPI = Math.PI * 2.0
-            val semiCirclesPerMeter = 107.173
-            val messages: MutableList<Mesg> = ArrayList()
-
-            // TODO
-            val firstReading = 0L
-
-            // The starting timestamp for the activity
-            val startTime = DateTime(firstReading)
-
-            // Timer Events are a BEST PRACTICE for FIT ACTIVITY files
-            val eventMesg = EventMesg()
-            eventMesg.timestamp = startTime
-            eventMesg.event = Event.TIMER
-            eventMesg.eventType = EventType.START
-            messages.add(eventMesg)
-
-            // the developer metadata does not change but is reused for every measurement
-            val developerMetadata = getDeveloperMetadata()
-
-            // record the developer ID message into the FIT file
-            messages.add(developerMetadata)
-
-            // Create the Developer Data Field Descriptions
-            val doughnutsFieldDescMesg = FieldDescriptionMesg()
-            doughnutsFieldDescMesg.developerDataIndex = 0.toShort()
-            doughnutsFieldDescMesg.fieldDefinitionNumber = 0.toShort()
-            doughnutsFieldDescMesg.fitBaseTypeId = FitBaseType.FLOAT32
-            doughnutsFieldDescMesg.setUnits(0, "doughnuts")
-            doughnutsFieldDescMesg.nativeMesgNum = MesgNum.SESSION
-            messages.add(doughnutsFieldDescMesg)
-            val hrFieldDescMesg = FieldDescriptionMesg()
-            hrFieldDescMesg.developerDataIndex = 0.toShort()
-            hrFieldDescMesg.fieldDefinitionNumber = 1.toShort()
-            hrFieldDescMesg.fitBaseTypeId = FitBaseType.UINT8
-            hrFieldDescMesg.setFieldName(0, "Heart Rate")
-            hrFieldDescMesg.setUnits(0, "bpm")
-            hrFieldDescMesg.nativeFieldNum = RecordMesg.HeartRateFieldNum.toShort()
-            hrFieldDescMesg.nativeMesgNum = MesgNum.RECORD
-            messages.add(hrFieldDescMesg)
-
-            // Every FIT ACTIVITY file MUST contain Record messages
-            val timestamp = DateTime(startTime)
-
-            // Create one hour (3600 seconds) of Record data
-            for (i in 0..3600) {
-                // Create a new Record message and set the timestamp
-                val recordMesg = RecordMesg()
-                recordMesg.timestamp = timestamp
-
-                // Fake Record Data of Various Signal Patterns
-                recordMesg.distance = i.toFloat()
-                recordMesg.speed = 1.toFloat()
-                recordMesg.heartRate =
-                    ((sin(twoPI * (0.01 * i + 10)) + 1.0) * 127.0).toInt().toShort() // Sine
-                recordMesg.cadence = (i % 255).toShort() // Sawtooth
-                recordMesg.power = if ((i % 255).toShort() < 157) 150 else 250 //Square
-                recordMesg.altitude = (abs(i.toDouble() % 255.0) - 127.0).toFloat() // Triangle
-                recordMesg.positionLat = 0
-                recordMesg.positionLong = (i * semiCirclesPerMeter).roundToInt()
-
-                // Add a Developer Field to the Record Message
-                val hrDevField = DeveloperField(hrFieldDescMesg, developerMetadata)
-                recordMesg.addDeveloperField(hrDevField)
-                hrDevField.value = (sin(twoPI * (.01 * i + 10)) + 1.0).toInt().toShort() * 127.0
-
-                // Write the Record message to the output stream
-                messages.add(recordMesg)
-
-                // Increment the timestamp by one second
-                timestamp.add(1)
+        private fun createEndEvent(end: DateTime): EventMesg =
+            EventMesg().apply {
+                timestamp = end
+                event = Event.TIMER
+                eventType = EventType.STOP_ALL
             }
 
-            // Timer Events are a BEST PRACTICE for FIT ACTIVITY files
-            val eventMesgStop = EventMesg()
-            eventMesgStop.timestamp = timestamp
-            eventMesgStop.event = Event.TIMER
-            eventMesgStop.eventType = EventType.STOP_ALL
-            messages.add(eventMesgStop)
+        private fun createLap(lapStartTime: DateTime, @NonNull elapsedTime: Float): LapMesg =
+            LapMesg().apply {
+                messageIndex = 0
+                startTime = lapStartTime
+                timestamp = lapStartTime
 
-            // Every FIT ACTIVITY file MUST contain at least one Lap message
-            val lapMesg = LapMesg()
-            lapMesg.messageIndex = 0
-            lapMesg.timestamp = timestamp
-            lapMesg.startTime = startTime
-            lapMesg.totalElapsedTime = (timestamp.timestamp - startTime.timestamp).toFloat()
-            lapMesg.totalTimerTime = (timestamp.timestamp - startTime.timestamp).toFloat()
-            messages.add(lapMesg)
-
-            // Every FIT ACTIVITY file MUST contain at least one Session message
-            val sessionMesg = SessionMesg()
-            sessionMesg.messageIndex = 0
-            sessionMesg.timestamp = timestamp
-            sessionMesg.startTime = startTime
-            sessionMesg.totalElapsedTime = (timestamp.timestamp - startTime.timestamp).toFloat()
-            sessionMesg.totalTimerTime = (timestamp.timestamp - startTime.timestamp).toFloat()
-            sessionMesg.sport = Sport.STAND_UP_PADDLEBOARDING
-            sessionMesg.subSport = SubSport.GENERIC
-            sessionMesg.firstLapIndex = 0
-            sessionMesg.numLaps = 1
-            messages.add(sessionMesg)
-
-            // Add a Developer Field to the Session message
-            val doughnutsEarnedDevField = DeveloperField(doughnutsFieldDescMesg, developerMetadata)
-            doughnutsEarnedDevField.value = sessionMesg.totalElapsedTime / 1200.0f
-            sessionMesg.addDeveloperField(doughnutsEarnedDevField)
-
-            // Every FIT ACTIVITY file MUST contain EXACTLY one Activity message
-            val activityMesg = ActivityMesg()
-            activityMesg.timestamp = timestamp
-            activityMesg.numSessions = 1
-            val timeZone: TimeZone = TimeZone.getTimeZone("America/Denver")
-            val timezoneOffset: Long = (timeZone.rawOffset + timeZone.dstSavings) / 1000L
-            activityMesg.localTimestamp = timestamp.timestamp + timezoneOffset
-            activityMesg.totalTimerTime = (timestamp.timestamp - startTime.timestamp).toFloat()
-            messages.add(activityMesg)
-            createActivityFile(messages, filename, startTime)
-        }
-
-        private fun createActivityFile(messages: List<Mesg?>, filename: String, startTime: DateTime?) {
-            // The combination of file type, manufacturer id, product id, and serial number should be unique.
-            // When available, a non-random serial number should be used.
-            val fileType = File.ACTIVITY
-            val manufacturerId = Manufacturer.DEVELOPMENT.toShort()
-            val productId: Short = 0
-            val softwareVersion = 1.0f
-            val random = Random()
-            val serialNumber = random.nextInt()
-
-            // Every FIT file MUST contain a File ID message
-            val fileIdMesg = FileIdMesg()
-            fileIdMesg.type = fileType
-            fileIdMesg.manufacturer = manufacturerId.toInt()
-            fileIdMesg.product = productId.toInt()
-            fileIdMesg.timeCreated = startTime
-            fileIdMesg.serialNumber = serialNumber.toLong()
-
-            // A Device Info message is a BEST PRACTICE for FIT ACTIVITY files
-            val deviceInfoMesg = DeviceInfoMesg()
-            deviceInfoMesg.deviceIndex = DeviceIndex.CREATOR
-            deviceInfoMesg.manufacturer = Manufacturer.DEVELOPMENT
-            deviceInfoMesg.product = productId.toInt()
-            deviceInfoMesg.productName = "FIT Cookbook" // Max 20 Chars
-            deviceInfoMesg.serialNumber = serialNumber.toLong()
-            deviceInfoMesg.softwareVersion = softwareVersion
-            deviceInfoMesg.timestamp = startTime
-
-            // Create the output stream
-            val encode: FileEncoder = try {
-                FileEncoder(java.io.File(filename), Fit.ProtocolVersion.V2_0)
-            } catch (e: FitRuntimeException) {
-                System.err.println("Error opening file $filename")
-                e.printStackTrace()
-                return
-            }
-            encode.write(fileIdMesg)
-            encode.write(deviceInfoMesg)
-            for (message in messages) encode.write(message)
-
-            // Close the output stream
-            try {
-                encode.close()
-            } catch (e: FitRuntimeException) {
-                System.err.println("Error closing encode.")
-                e.printStackTrace()
-                return
+                totalElapsedTime = elapsedTime
+                totalTimerTime = elapsedTime
             }
 
-            println("Encoded FIT Activity file $filename")
+        private fun getDeviceInfo(mesgTimestamp: DateTime): DeviceInfoMesg =
+            DeviceInfoMesg().apply {
+                deviceIndex = DeviceIndex.CREATOR
+                manufacturer = MANUFACTURER_ID
+                product = TRACKING_PRODUCT_ID
+                productName = TRACKING_PRODUCT_NAME
+                serialNumber = SERIAL_NUMBER
+                softwareVersion = SOFTWARE_VERSION.toFloat()
+                timestamp = mesgTimestamp
+            }
+
+        private fun createSession(
+            activityStartTime: DateTime,
+            @NonNull elapsedTime: Float,
+        ): SessionMesg =
+            SessionMesg().apply {
+                messageIndex = 0
+                firstLapIndex = 0
+                numLaps = 0
+
+                startTime = activityStartTime
+                timestamp = activityStartTime
+
+                totalElapsedTime = elapsedTime
+                totalTimerTime = elapsedTime
+
+                sport = Sport.ROWING
+                subSport = SubSport.GENERIC
+            }
+
+        private fun getFileMetadata(startTime: DateTime): FileIdMesg =
+            FileIdMesg().apply {
+                type = File.ACTIVITY
+                manufacturer = MANUFACTURER_ID
+                product = TRACKING_PRODUCT_ID
+                timeCreated = startTime
+                serialNumber = SERIAL_NUMBER
+            }
+
+        private fun getFilenameForTimestamp(timestamp: Long): String {
+            // Create a DateFormatter object for displaying date in specified format.
+            val formatter = SimpleDateFormat("yyyy-MM-dd-hh-mm-ss", Locale.UK)
+
+            // Create a calendar object that will convert the date and time value in milliseconds to date.
+            val calendar = Calendar.getInstance().apply {
+                timeInMillis = timestamp
+            }
+
+            return "Nero-${formatter.format(calendar.time)}.fit"
         }
     }
 }

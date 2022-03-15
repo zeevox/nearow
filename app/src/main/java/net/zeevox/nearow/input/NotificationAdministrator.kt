@@ -14,7 +14,7 @@ class NotificationAdministrator(
     private val application: Application
 ) {
     @RequiresApi(Build.VERSION_CODES.O)
-    internal fun createNotificationChannel() {
+    internal fun createServiceNotificationChannel() {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -71,7 +71,7 @@ class NotificationAdministrator(
     internal fun getForegroundServiceNotification(): Notification {
         // Notifications channel required for Android 8.0+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            createNotificationChannel()
+            createServiceNotificationChannel()
 
         val notificationBuilder = NotificationCompat.Builder(context, application.packageName)
 

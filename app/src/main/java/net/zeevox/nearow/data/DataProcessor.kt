@@ -14,10 +14,12 @@ import net.zeevox.nearow.db.TrackDatabase
 import net.zeevox.nearow.db.model.TrackDao
 import net.zeevox.nearow.db.model.TrackPoint
 import net.zeevox.nearow.input.DataCollectionService
+import net.zeevox.nearow.output.FitFileExporter
+import java.io.File
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-class DataProcessor(applicationContext: Context) {
+class DataProcessor(private val applicationContext: Context) {
 
     companion object {
         // rough estimate for sample rate
@@ -83,6 +85,13 @@ class DataProcessor(applicationContext: Context) {
          */
         @UiThread
         fun onLocationUpdate(location: Location, totalDistance: Float)
+
+        /**
+         * Called once a session has been finished and successfully
+         * exported to a file.
+         */
+        @UiThread
+        fun onTrackExported(exportedFile: File)
     }
 
     private var listener: DataUpdateListener? = null
@@ -105,7 +114,7 @@ class DataProcessor(applicationContext: Context) {
      * Getting the session ID is expected to be a very quick function
      * call so we can afford to run it as a blocking function
      */
-    private val currentSessionId: Int = runBlocking { getNewSessionId() }
+    private var currentSessionId: Int = -1
 
     /**
      * Check database for existing sessions. The new session ID is
@@ -199,12 +208,12 @@ class DataProcessor(applicationContext: Context) {
 
     /**
      * Called when a new GPS measurement comes in.
-     * This subroutine stores this measurement in the database
-     * and informs any UI listener of this new measurement
+     * Informs any UI listener of this new measurement
+     * and stores current location in memory
      */
     fun addGpsReading(location: Location) {
         // sum total distance travelled
-        if (this::mLocation.isInitialized) totalDistance += location.distanceTo(mLocation)
+        if (this::mLocation.isInitialized && mTracking) totalDistance += location.distanceTo(mLocation)
 
         // inform our listener of a new GPS location
         listener?.onLocationUpdate(location, totalDistance)
@@ -247,7 +256,7 @@ class DataProcessor(applicationContext: Context) {
         recentStrokeRates.addLast(currentStrokeRate)
 
         // save into the database
-        track.insert(
+        if (mTracking) track.insert(
             TrackPoint(
                 currentSessionId,
                 System.currentTimeMillis(),
@@ -259,5 +268,21 @@ class DataProcessor(applicationContext: Context) {
         )
 
         return currentStrokeRate
+    }
+
+    private var mTracking = false
+
+    fun startTracking() {
+        currentSessionId = runBlocking { getNewSessionId() }
+        totalDistance = 0f
+        mTracking = true
+    }
+
+    fun stopTracking() {
+        mTracking = false
+        scope.launch {
+            val file = FitFileExporter(applicationContext).exportTrackPoints(track.loadSession(currentSessionId))
+            listener?.onTrackExported(file)
+        }
     }
 }

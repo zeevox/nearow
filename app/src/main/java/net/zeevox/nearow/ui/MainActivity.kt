@@ -27,7 +27,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
 
     /** for communicating with the service */
-    private lateinit var mService: DataCollectionService
+    lateinit var mService: DataCollectionService
 
     /** whether there is an established link with the service */
     private var mBound: Boolean = false

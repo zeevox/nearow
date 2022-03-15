@@ -15,6 +15,7 @@ import com.github.mikephil.charting.data.*
 import com.github.mikephil.charting.utils.ColorTemplate
 import net.zeevox.nearow.R
 import net.zeevox.nearow.databinding.FragmentStrokeRateDebuggerBinding
+import java.io.File
 
 class StrokeRateDebuggerFragment : BaseFragment() {
     lateinit var chart: LineChart
@@ -161,6 +162,14 @@ class StrokeRateDebuggerFragment : BaseFragment() {
     override fun onLocationUpdate(location: Location, totalDistance: Float) {
         // stroke rate debugger does not care about location
         return
+    }
+
+    /**
+     * Called once a session has been finished and successfully
+     * exported to a file.
+     */
+    override fun onTrackExported(exportedFile: File) {
+        TODO("Not yet implemented")
     }
 
     override fun onNewAutocorrelationTable(array: DoubleArray) {

@@ -21,7 +21,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.location.*
 import net.zeevox.nearow.data.DataProcessor
-import net.zeevox.nearow.db.TrackDatabase
 
 
 // initially based on https://www.raywenderlich.com/10838302-sensors-tutorial-for-android-getting-started
@@ -31,8 +30,6 @@ class DataCollectionService : Service(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
 
     private lateinit var mNotificationAdministrator: NotificationAdministrator
-
-    private lateinit var db: TrackDatabase
 
     // service config flags of sorts
     private var showNotification = false
@@ -77,7 +74,7 @@ class DataCollectionService : Service(), SensorEventListener {
         /**
          * The desired interval for location updates. Inexact. Updates may be more or less frequent.
          */
-        private const val UPDATE_INTERVAL_IN_MILLISECONDS: Long = 10000
+        private const val UPDATE_INTERVAL_IN_MILLISECONDS: Long = 1000
 
         /**
          * The fastest rate for active location updates. Updates will never be more frequent
@@ -240,10 +237,11 @@ class DataCollectionService : Service(), SensorEventListener {
      * Sets the location request parameters.
      */
     private fun createLocationRequest() {
-        mLocationRequest = LocationRequest.create()
-        mLocationRequest.interval = UPDATE_INTERVAL_IN_MILLISECONDS
-        mLocationRequest.fastestInterval = FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS
-        mLocationRequest.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+        mLocationRequest = LocationRequest.create().apply {
+            interval = UPDATE_INTERVAL_IN_MILLISECONDS
+            fastestInterval = FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS
+            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+        }
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
@@ -287,5 +285,9 @@ class DataCollectionService : Service(), SensorEventListener {
     fun hideNotification() {
         showNotification = false
     }
+
+    fun startTracking() = dataProcessor.startTracking()
+
+    fun stopTracking() = dataProcessor.stopTracking()
 
 }
