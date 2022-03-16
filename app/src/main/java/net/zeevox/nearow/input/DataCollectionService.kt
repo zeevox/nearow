@@ -35,7 +35,9 @@ class DataCollectionService : Service(), SensorEventListener {
     private var showNotification = false
     private var gpsEnabled = true
 
-    private lateinit var dataProcessor: DataProcessor
+    private lateinit var mDataProcessor: DataProcessor
+    val dataProcessor: DataProcessor
+        get() = mDataProcessor
 
     /**
      * Boolean used to determine whether there is a change in device configuration
@@ -114,7 +116,7 @@ class DataCollectionService : Service(), SensorEventListener {
         // start the data processor before registering sensor and GPS
         // listeners so that it is ready to receive values as soon as
         // they start coming in.
-        dataProcessor = DataProcessor(applicationContext).also {
+        mDataProcessor = DataProcessor(applicationContext).also {
             // physical sensor data is not permission-protected so no need to check
             registerSensorListener()
 
@@ -174,7 +176,7 @@ class DataCollectionService : Service(), SensorEventListener {
     }
 
     fun setDataUpdateListener(listener: DataProcessor.DataUpdateListener) =
-        dataProcessor.setListener(listener)
+        mDataProcessor.setListener(listener)
 
     private fun registerSensorListener() {
         sensorManager = getSystemService(AppCompatActivity.SENSOR_SERVICE) as SensorManager
@@ -210,7 +212,7 @@ class DataCollectionService : Service(), SensorEventListener {
         mLocationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 super.onLocationResult(locationResult)
-                dataProcessor.addGpsReading(locationResult.lastLocation)
+                mDataProcessor.addGpsReading(locationResult.lastLocation)
             }
         }
 
@@ -248,7 +250,7 @@ class DataCollectionService : Service(), SensorEventListener {
         if (event == null) return
 
         when (event.sensor.type) {
-            Sensor.TYPE_LINEAR_ACCELERATION -> dataProcessor.addAccelerometerReading(event.values)
+            Sensor.TYPE_LINEAR_ACCELERATION -> mDataProcessor.addAccelerometerReading(event.values)
         }
 
         if (showNotification) startForeground(
@@ -277,17 +279,5 @@ class DataCollectionService : Service(), SensorEventListener {
 
         }
     }
-
-    fun showNotification() {
-        showNotification = true
-    }
-
-    fun hideNotification() {
-        showNotification = false
-    }
-
-    fun startTracking() = dataProcessor.startTracking()
-
-    fun stopTracking() = dataProcessor.stopTracking()
 
 }

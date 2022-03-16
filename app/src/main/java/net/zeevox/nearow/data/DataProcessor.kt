@@ -213,7 +213,8 @@ class DataProcessor(private val applicationContext: Context) {
      */
     fun addGpsReading(location: Location) {
         // sum total distance travelled
-        if (this::mLocation.isInitialized && mTracking) totalDistance += location.distanceTo(mLocation)
+        if (this::mLocation.isInitialized && mTracking) totalDistance += location.distanceTo(
+            mLocation)
 
         // inform our listener of a new GPS location
         listener?.onLocationUpdate(location, totalDistance)
@@ -272,16 +273,49 @@ class DataProcessor(private val applicationContext: Context) {
 
     private var mTracking = false
 
-    fun startTracking() {
+    /**
+     * Whether the [DataProcessor] is persisting values to the database
+     */
+    val isRecording: Boolean
+        get() = mTracking
+
+    /**
+     * Start recording a new rowing session. Once this method is called,
+     * processed values such as stroke rate and GPS location are saved.
+     *
+     * @return whether recording was successfully started
+     */
+    fun startRecording(): Boolean {
+        // if already recording, impossible
+        if (mTracking) return false
+
         currentSessionId = runBlocking { getNewSessionId() }
         totalDistance = 0f
         mTracking = true
+        return true
     }
 
-    fun stopTracking() {
+    /**
+     * Stop recording the current rowing session.
+     *
+     * @return whether recording was successfully stopped
+     */
+    fun stopRecording(): Boolean {
+        // cannot stop if not yet started!
+        if (!mTracking) return false
+
         mTracking = false
+        return true
+    }
+
+    /**
+     * Export the current rowing session into a FIT activity file
+     */
+    fun exportSession() {
         scope.launch {
-            val file = FitFileExporter(applicationContext).exportTrackPoints(track.loadSession(currentSessionId))
+            val file = FitFileExporter(applicationContext).exportTrackPoints(
+                track.loadSession(currentSessionId)
+            )
             listener?.onTrackExported(file)
         }
     }
