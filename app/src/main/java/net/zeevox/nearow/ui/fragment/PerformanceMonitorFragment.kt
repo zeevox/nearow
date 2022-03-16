@@ -4,13 +4,13 @@ import android.content.Intent
 import android.location.Location
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.FileProvider
 import androidx.core.content.res.ResourcesCompat
-import hallianinc.opensource.timecounter.StopWatch
 import net.zeevox.nearow.R
 import net.zeevox.nearow.databinding.FragmentPerformanceTrackerBinding
 import net.zeevox.nearow.ui.MainActivity
@@ -22,7 +22,6 @@ class PerformanceMonitorFragment : BaseFragment() {
     private var _binding: FragmentPerformanceTrackerBinding? = null
     private val binding get() = _binding!!
 
-    private lateinit var stopWatch: StopWatch
     private var stopWatchStarted = false
 
     override fun onCreateView(
@@ -38,12 +37,13 @@ class PerformanceMonitorFragment : BaseFragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        stopWatch = StopWatch(binding.timer)
-
         binding.startStopButton.setOnClickListener {
             if (!stopWatchStarted) {
 
-                stopWatch.resume()
+                // reset chronometer
+                binding.timer.base = SystemClock.elapsedRealtime()
+                // start counting up
+                binding.timer.start()
 
                 // TODO poor assumption: fragment depending on [MainActivity]
                 (activity as MainActivity).mService.startTracking()
@@ -53,7 +53,7 @@ class PerformanceMonitorFragment : BaseFragment() {
                 binding.startStopButton.icon =
                     ResourcesCompat.getDrawable(resources, R.drawable.ic_round_stop_24, null)
             } else {
-                stopWatch.pause()
+                binding.timer.stop()
                 // TODO poor assumption: fragment depending on [MainActivity]
                 (activity as MainActivity).mService.stopTracking()
 
