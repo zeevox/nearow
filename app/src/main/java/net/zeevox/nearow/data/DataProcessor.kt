@@ -8,7 +8,6 @@ import androidx.annotation.UiThread
 import androidx.annotation.WorkerThread
 import androidx.room.Room
 import kotlinx.coroutines.*
-import net.zeevox.nearow.BuildConfig
 import net.zeevox.nearow.data.rate.Autocorrelator
 import net.zeevox.nearow.db.TrackDatabase
 import net.zeevox.nearow.db.model.TrackDao
@@ -63,14 +62,6 @@ class DataProcessor(private val applicationContext: Context) {
     }
 
     interface DataUpdateListener {
-        @UiThread
-        fun onNewAccelerationReading(reading: Double) {
-        }
-
-        @UiThread
-        fun onNewAutocorrelationTable(array: DoubleArray) {
-        }
-
         /**
          * Called when stroke rate is recalculated
          * [strokeRate] - estimated rate in strokes per minute
@@ -158,7 +149,7 @@ class DataProcessor(private val applicationContext: Context) {
 
     // somewhere to store acceleration readings
     private val accelReadings =
-        CircularDoubleBuffer(ACCEL_BUFFER_SIZE) { Random.nextDouble() * (if (Random.nextBoolean()) 1 else -1) }
+        CircularDoubleBuffer(ACCEL_BUFFER_SIZE) { Random.nextDouble() }
 
     // and another one for their corresponding timestamps
     // this is so that we can calculate the sampling frequency
@@ -198,10 +189,6 @@ class DataProcessor(private val applicationContext: Context) {
         // store the corresponding timestamp as well
         timestamps.addLast(((System.currentTimeMillis() - startTimestamp) / 1000L).toDouble())
 
-        // let our debug listener know that a reading has come in
-        if (BuildConfig.DEBUG)
-            listener?.onNewAccelerationReading(magnitude)
-
         // save current readings into memory for when next readings come in
         System.arraycopy(filtered, 0, lastAccelReading, 0, 3)
     }
@@ -239,13 +226,13 @@ class DataProcessor(private val applicationContext: Context) {
 
     @WorkerThread
     private suspend fun getCurrentStrokeRate(): Double {
-        val frequencyScores = Autocorrelator.getFrequencyScores(accelReadings)
-
-        // for debug purposes - post the table with scores for each frequency
-        // this is to visualise which stroke rates are being selected as most probable
-        if (BuildConfig.DEBUG) Handler(Looper.getMainLooper()).post {
-            listener?.onNewAutocorrelationTable(frequencyScores)
+        // rudimentary but efficient stillness detection
+        if (accelReadings.average() < 0.1 && magnitude(lastAccelReading) < 0.1) {
+            recentStrokeRates.addLast(0.0)
+            return 0.0
         }
+
+        val frequencyScores = Autocorrelator.getFrequencyScores(accelReadings)
 
         val currentStrokeRate = samplesCountToFrequency(
             Autocorrelator.getBestFrequency(
