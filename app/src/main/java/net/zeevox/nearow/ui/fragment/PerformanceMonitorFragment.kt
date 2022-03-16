@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
@@ -108,6 +109,9 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
 
         // do not let the screen dim or switch off
         binding.root.keepScreenOn = true
+
+        // TODO create alternative landscape layout file to support rotation
+        requireActivity().requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
 
         binding.startStopButton.setOnClickListener {
             if (!mService.dataProcessor.isRecording)
