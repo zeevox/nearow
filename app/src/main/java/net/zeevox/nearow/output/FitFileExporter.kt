@@ -40,7 +40,6 @@ class FitFileExporter(private val context: Context) {
     }
 
     private fun createActivityFromTrackPoints(trackPoints: List<TrackPoint>): List<Mesg> {
-        val messages: MutableList<Mesg> = mutableListOf()
 
         val firstPoint = trackPoints.first()
         val lastPoint = trackPoints.last()
@@ -56,33 +55,24 @@ class FitFileExporter(private val context: Context) {
         val elapsedTime =
             ((activityEndTime.timestamp - activityStartTime.timestamp) / 1000).toFloat()
 
-        // Every FIT file MUST contain a File ID message
-        messages.add(getFileMetadata(activityStartTime))
-
-        // A Device Info message is a BEST PRACTICE for FIT ACTIVITY files
-        messages.add(getDeviceInfo(activityStartTime))
-
-        // Timer Events are a BEST PRACTICE for FIT ACTIVITY files
-        messages.add(createStartEvent(activityStartTime))
-
-        /** Create a [RecordMesg] for each [TrackPoint] and add it to the output queue **/
-        trackPoints.forEach { messages.add(getRecordMesgForTrackPoint(it)) }
-
-        // Every FIT file MUST contain at least one Lap message
-        messages.add(
-            createLap(activityEndTime, elapsedTime, startLat, startLong, endLat, endLong)
-        )
-
-        // mark the activity as ended
-        messages.add(createEndEvent(activityEndTime))
-
-        // Every FIT file MUST contain at least one Session message
-        messages.add(createSession(activityEndTime, elapsedTime, startLat, startLong))
-
-        // Every FIT ACTIVITY file MUST contain EXACTLY one Activity message
-        messages.add(createActivityMesg(activityEndTime))
-
-        return messages
+        return buildList {
+            // Every FIT file MUST contain a File ID message
+            add(getFileMetadata(activityStartTime))
+            // A Device Info message is a BEST PRACTICE for FIT ACTIVITY files
+            add(getDeviceInfo(activityStartTime))
+            // Timer Events are a BEST PRACTICE for FIT ACTIVITY files
+            add(createStartEvent(activityStartTime))
+            // Create a RecordMesg for each TrackPoint and add it to the output queue
+            trackPoints.mapTo(this, ::getRecordMesgForTrackPoint)
+            // Every FIT file MUST contain at least one Lap message
+            add(createLap(activityEndTime, elapsedTime, startLat, startLong, endLat, endLong))
+            // Mark the activity as ended
+            add(createEndEvent(activityEndTime))
+            // Every FIT file MUST contain at least one Session message
+            add(createSession(activityEndTime, elapsedTime, startLat, startLong))
+            // Every FIT ACTIVITY file MUST contain EXACTLY one Activity message
+            add(createActivityMesg(activityEndTime))
+        }
     }
 
     private suspend fun writeMessagesToFile(messages: List<Mesg?>, file: java.io.File) {
@@ -160,7 +150,7 @@ class FitFileExporter(private val context: Context) {
             _startPositionLat: Int? = null,
             _startPositionLong: Int? = null,
             _endPositionLat: Int? = null,
-            _endPositionLong: Int? = null
+            _endPositionLong: Int? = null,
         ): LapMesg =
             LapMesg().apply {
                 messageIndex = 0
