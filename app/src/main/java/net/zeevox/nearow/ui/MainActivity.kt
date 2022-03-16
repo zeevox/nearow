@@ -16,7 +16,6 @@ class MainActivity : AppCompatActivity() {
     /** the UI fragment currently displayed in this activity */
     private lateinit var fragment: Fragment
 
-
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(R.style.Theme_Nearow)
 

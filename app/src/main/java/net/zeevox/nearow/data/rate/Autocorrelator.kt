@@ -26,10 +26,5 @@ class Autocorrelator {
 
         fun getBestFrequency(frequencies: DoubleArray, minFreq: Int): Int =
             frequencies.indices.drop(minFreq).maxByOrNull { frequencies[it] } ?: -1
-
-        fun getLocalMaxima(frequencies: DoubleArray, minFreq: Int): List<Int> {
-            // TODO : Avoid harmonic frequencies from interfering with [getMaxFrequency]
-            return List<Int>(1) { 0 }
-        }
     }
 }

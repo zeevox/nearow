@@ -11,7 +11,7 @@ import net.zeevox.nearow.ui.MainActivity
 
 class NotificationAdministrator(
     private val context: Context,
-    private val application: Application
+    private val application: Application,
 ) {
     @RequiresApi(Build.VERSION_CODES.O)
     internal fun createServiceNotificationChannel() {
