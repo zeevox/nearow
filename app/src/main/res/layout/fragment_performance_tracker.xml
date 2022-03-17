@@ -113,7 +113,8 @@
             android:layout_margin="@dimen/default_padding"
             android:text="@string/action_start_tracking"
             android:id="@+id/start_stop_button"
-            app:icon="@android:drawable/ic_media_play" />
+            app:icon="@android:drawable/ic_media_play"
+            app:backgroundTint="@color/start_green"/>
 
     </LinearLayout>
 </ScrollView>

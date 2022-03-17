@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.location.Location
 import android.net.Uri
 import android.os.Build
@@ -140,10 +141,14 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
 
         mService.dataProcessor.startRecording()
 
-        binding.startStopButton.text = getString(R.string.action_stop_tracking)
-        // https://stackoverflow.com/a/29146895
-        binding.startStopButton.icon =
-            ResourcesCompat.getDrawable(resources, R.drawable.ic_round_stop_24, null)
+        binding.startStopButton.apply {
+            text = getString(R.string.action_stop_tracking)
+            backgroundTintList = ColorStateList.valueOf(
+                ResourcesCompat.getColor(resources, R.color.end_red, null))
+            // https://stackoverflow.com/a/29146895
+            icon =
+                ResourcesCompat.getDrawable(resources, R.drawable.ic_round_stop_24, null)
+        }
     }
 
     private fun stopTracking() {
@@ -151,9 +156,13 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
 
         mService.dataProcessor.stopRecording()
 
-        binding.startStopButton.text = getString(R.string.action_start_tracking)
-        binding.startStopButton.icon =
-            ResourcesCompat.getDrawable(resources, R.drawable.ic_round_play_arrow_24, null)
+        binding.startStopButton.apply {
+            text = getString(R.string.action_start_tracking)
+            backgroundTintList = ColorStateList.valueOf(
+                ResourcesCompat.getColor(resources, R.color.start_green, null))
+            icon =
+                ResourcesCompat.getDrawable(resources, R.drawable.ic_round_play_arrow_24, null)
+        }
 
         mService.dataProcessor.exportSession()
     }
