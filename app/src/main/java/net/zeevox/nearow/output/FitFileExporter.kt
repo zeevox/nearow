@@ -27,6 +27,9 @@ import java.util.TimeZone
 class FitFileExporter(private val context: Context) {
 
     suspend fun exportTrackPoints(trackPoints: List<TrackPoint>): java.io.File {
+        if (trackPoints.size <= 2)
+            throw IllegalArgumentException("Too few trackPoints submitted to export to a file")
+
         val activity = createActivityFromTrackPoints(trackPoints)
 
         // create directory if not exists
