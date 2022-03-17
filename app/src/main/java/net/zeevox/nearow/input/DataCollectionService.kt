@@ -76,14 +76,13 @@ class DataCollectionService : Service(), SensorEventListener {
         /**
          * The desired interval for location updates. Inexact. Updates may be more or less frequent.
          */
-        private const val UPDATE_INTERVAL_IN_MILLISECONDS: Long = 1000
+        private const val UPDATE_INTERVAL_IN_MILLISECONDS: Long = 1000L
 
         /**
          * The fastest rate for active location updates. Updates will never be more frequent
          * than this value.
          */
-        private const val FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS =
-            UPDATE_INTERVAL_IN_MILLISECONDS / 2
+        private const val FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS: Long = 0L
     }
 
     /** https://developer.android.com/guide/components/bound-services#Binder **/
