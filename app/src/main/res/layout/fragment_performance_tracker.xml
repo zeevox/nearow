@@ -2,6 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
@@ -11,10 +12,11 @@
         android:layout_height="wrap_content">
 
         <androidx.appcompat.widget.Toolbar
+            android:id="@+id/pm_toolbar"
             android:layout_width="match_parent"
-            app:title="@string/app_name"
             android:layout_height="?attr/actionBarSize"
-            app:menu="@menu/menu_pm_toolbar" />
+            app:menu="@menu/menu_pm_toolbar"
+            app:title="@string/app_name" />
     </com.google.android.material.appbar.AppBarLayout>
 
 
@@ -33,6 +35,7 @@
 
 
             <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/stroke_rate"
                 style="@style/TextAppearance.AppCompat.Display3"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -49,6 +52,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/split_frame"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_horizontal"
@@ -56,6 +60,7 @@
             android:padding="@dimen/default_padding">
 
             <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/split"
                 style="@style/TextAppearance.AppCompat.Display4"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -75,6 +80,7 @@
         </LinearLayout>
 
         <Chronometer
+            android:id="@+id/timer"
             style="@style/TextAppearance.AppCompat.Display3"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -83,6 +89,7 @@
             tools:text="35:23.7" />
 
         <LinearLayout
+            android:id="@+id/distance_frame"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:gravity="center_horizontal"
@@ -91,6 +98,7 @@
 
 
             <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/distance"
                 style="@style/TextAppearance.AppCompat.Display3"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -108,6 +116,7 @@
         </LinearLayout>
 
         <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/start_stop_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"

@@ -17,6 +17,13 @@ android {
         versionName "0.1"
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+
+        // https://stackoverflow.com/a/48674264
+        kapt {
+            arguments {
+                arg("room.schemaLocation", "$projectDir/schemas")
+            }
+        }
     }
 
     buildTypes {
@@ -39,6 +46,7 @@ android {
         viewBinding true
         dataBinding true
     }
+
     packagingOptions {
         resources {
             excludes += ['META-INF/DEPENDENCIES']

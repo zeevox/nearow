@@ -231,15 +231,21 @@ class DataProcessor(applicationContext: Context) {
         recentStrokeRates.addLast(currentStrokeRate)
 
         // save into the database
-        if (mTracking)
-            track.insert(
-                TrackPoint(
-                    currentSessionId,
-                    System.currentTimeMillis(),
-                    smoothedStrokeRate,
-                    mLocation.latitude,
-                    mLocation.longitude,
-                    mLocation.speed))
+        if (mTracking) {
+            val trackPoint =
+                if (!this@DataProcessor::mLocation.isInitialized ||
+                    System.currentTimeMillis() - mLocation.time > 20000L)
+                    TrackPoint(currentSessionId, System.currentTimeMillis(), smoothedStrokeRate)
+                else
+                    TrackPoint(
+                        currentSessionId,
+                        System.currentTimeMillis(),
+                        smoothedStrokeRate,
+                        mLocation.latitude,
+                        mLocation.longitude,
+                        mLocation.speed)
+            track.insert(trackPoint)
+        }
 
         return currentStrokeRate
     }
