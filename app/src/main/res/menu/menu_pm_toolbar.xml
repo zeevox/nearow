@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:title="@string/action_view_past_sessions"
+        android:titleCondensed="@string/action_view_past_sessions_condensed"
+        app:actionLayout="@layout/toolbar_button_session_history"
+        app:showAsAction="ifRoom" />
+    <item
+        android:title="@string/action_enable_gps"
+        app:actionLayout="@layout/toolbar_switch_gps"
+        app:showAsAction="always" />
+
+</menu>

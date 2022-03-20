@@ -9,7 +9,6 @@ import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.location.Location
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -21,16 +20,17 @@ import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
-import androidx.core.content.FileProvider
 import androidx.core.content.res.ResourcesCompat
 import androidx.fragment.app.Fragment
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.switchmaterial.SwitchMaterial
 import net.zeevox.nearow.R
 import net.zeevox.nearow.data.DataProcessor
 import net.zeevox.nearow.databinding.FragmentPerformanceTrackerBinding
 import net.zeevox.nearow.input.DataCollectionService
+import net.zeevox.nearow.ui.SessionsActivity
 import net.zeevox.nearow.utils.UnitConverter
-import java.io.File
 
 class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener {
 
@@ -100,6 +100,9 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
         return binding.root
     }
 
+    private lateinit var viewSessionsButton: MaterialButton
+    private lateinit var toolbarSwitchGps: SwitchMaterial
+
 
     /**
      * Called immediately after [onCreateView]
@@ -114,12 +117,27 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
         // TODO create alternative landscape layout file to support rotation
         requireActivity().requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
 
+        toolbarSwitchGps = binding.pmToolbar.findViewById(R.id.pm_toolbar_switch_gps)
+        viewSessionsButton = binding.pmToolbar.findViewById(R.id.pm_toolbar_action_session_history)
+
+        toolbarSwitchGps.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) mService.enableGps() else mService.disableGps()
+
+            val visibility = if (isChecked) View.VISIBLE else View.GONE
+            binding.splitFrame.visibility = visibility
+            binding.distanceFrame.visibility = visibility
+        }
+
+        viewSessionsButton.setOnClickListener {
+            openSessionsHistory()
+        }
+
         binding.startStopButton.setOnClickListener {
             if (!mService.dataProcessor.isRecording)
                 startTracking()
             else Snackbar.make(
                 binding.root,
-                "Long press to stop recording",
+                getString(R.string.info_use_long_press_to_stop),
                 Snackbar.LENGTH_LONG
             ).show()
         }
@@ -132,6 +150,9 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
             true
         }
     }
+
+    private fun openSessionsHistory() =
+        startActivity(Intent(requireActivity(), SessionsActivity::class.java))
 
     private fun startTracking() {
         // reset chronometer
@@ -149,6 +170,9 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
             icon =
                 ResourcesCompat.getDrawable(resources, R.drawable.ic_round_stop_24, null)
         }
+
+        viewSessionsButton.isEnabled = false
+        toolbarSwitchGps.isEnabled = false
     }
 
     private fun stopTracking() {
@@ -164,7 +188,8 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
                 ResourcesCompat.getDrawable(resources, R.drawable.ic_round_play_arrow_24, null)
         }
 
-        mService.dataProcessor.exportSession()
+        viewSessionsButton.isEnabled = true
+        toolbarSwitchGps.isEnabled = true
     }
 
     /** Bind to LocalService. If it is not running, automatically start it up */
@@ -241,41 +266,5 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
         binding.distanceFrame.visibility = View.VISIBLE
         binding.split.text = UnitConverter.speedToSplitFormatted(location.speed)
         binding.distance.text = String.format("%.0f", totalDistance)
-    }
-
-    /**
-     * Called once a session has been finished and successfully
-     * exported to a file.
-     * https://developer.android.com/training/secure-file-sharing/share-file
-     */
-    override fun onTrackExported(exportedFile: File) {
-        val fileUri: Uri = try {
-            FileProvider.getUriForFile(
-                requireContext(),
-                "net.zeevox.nearow.fileprovider",
-                exportedFile
-            )
-        } catch (e: IllegalArgumentException) {
-            Log.e(
-                "File Selector",
-                "The selected file can't be shared: $exportedFile"
-            )
-            null
-        } ?: return
-
-        startActivity(
-            Intent.createChooser(
-                Intent(Intent.ACTION_SEND).apply {
-                    putExtra(Intent.EXTRA_STREAM, fileUri)
-                    putExtra(Intent.EXTRA_TITLE, "Exported fit file")
-                    putExtra(
-                        Intent.EXTRA_TEXT,
-                        "Share the exported FIT file with another application"
-                    )
-                    setDataAndType(fileUri, "application/vnd.ant.fit")
-                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                }, null
-            )
-        )
     }
 }

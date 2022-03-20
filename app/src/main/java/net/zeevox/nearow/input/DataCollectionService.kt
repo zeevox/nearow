@@ -119,9 +119,11 @@ class DataCollectionService : Service(), SensorEventListener {
             // physical sensor data is not permission-protected so no need to check
             registerSensorListener()
 
+            initGpsClient()
+
             // measuring GPS is neither always needed (e.g. erg) nor permitted by user
             // check that access has been granted to the user's geolocation before starting gps collection
-            if (gpsEnabled && isGpsPermissionGranted()) requestLocationUpdates()
+            if (gpsEnabled && isGpsPermissionGranted()) enableGps()
         }
 
         startService(Intent(applicationContext, DataCollectionService::class.java))
@@ -162,10 +164,11 @@ class DataCollectionService : Service(), SensorEventListener {
                         this,
                         DataCollectionService::class.java
                     )
-                ) else startForeground(
-                NOTIFICATION_ID,
-                mNotificationAdministrator.getForegroundServiceNotification()
-            )
+                )
+        startForeground(
+            NOTIFICATION_ID,
+            mNotificationAdministrator.getForegroundServiceNotification()
+        )
         return true
     }
 
@@ -203,7 +206,7 @@ class DataCollectionService : Service(), SensorEventListener {
     /**
      * https://github.com/android/location-samples/blob/main/LocationUpdatesForegroundService/app/src/main/java/com/google/android/gms/location/sample/locationupdatesforegroundservice/LocationUpdatesService.java
      */
-    private fun requestLocationUpdates() {
+    private fun initGpsClient() {
         Log.d(javaClass.simpleName, "Requesting GPS location updates")
 
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
@@ -216,7 +219,47 @@ class DataCollectionService : Service(), SensorEventListener {
         }
 
         createLocationRequest()
+    }
 
+    /**
+     * Stop requesting location updates
+     */
+    fun disableGps() {
+        try {
+            mFusedLocationClient.removeLocationUpdates(mLocationCallback)
+            mRequestingLocationUpdates = false
+        } catch (unlikely: SecurityException) {
+            Log.e(javaClass.simpleName,
+                "Lost location permission. Could not remove updates. $unlikely")
+        }
+    }
+
+    /**
+     * Sets the location request parameters.
+     */
+    private fun createLocationRequest() {
+        mLocationRequest = LocationRequest.create().apply {
+            interval = UPDATE_INTERVAL_IN_MILLISECONDS
+            fastestInterval = FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS
+            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+        }
+    }
+
+    /**
+     * Called by the system to notify a Service that it is no longer used and is being removed.  The
+     * service should clean up any resources it holds (threads, registered
+     * receivers, etc) at this point.  Upon return, there will be no more calls
+     * in to this Service object and it is effectively dead.  Do not call this method directly.
+     */
+    override fun onDestroy() {
+        disableGps()
+        super.onDestroy()
+    }
+
+    /**
+     * Start requesting GPS location updates
+     */
+    fun enableGps() {
         mRequestingLocationUpdates = true
 
         try {
@@ -231,17 +274,6 @@ class DataCollectionService : Service(), SensorEventListener {
                 javaClass.simpleName,
                 "Lost location permission. Could not request updates. $unlikely"
             )
-        }
-    }
-
-    /**
-     * Sets the location request parameters.
-     */
-    private fun createLocationRequest() {
-        mLocationRequest = LocationRequest.create().apply {
-            interval = UPDATE_INTERVAL_IN_MILLISECONDS
-            fastestInterval = FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS
-            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
         }
     }
 

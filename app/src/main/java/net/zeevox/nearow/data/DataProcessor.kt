@@ -13,8 +13,6 @@ import net.zeevox.nearow.db.TrackDatabase
 import net.zeevox.nearow.db.model.TrackDao
 import net.zeevox.nearow.db.model.TrackPoint
 import net.zeevox.nearow.input.DataCollectionService
-import net.zeevox.nearow.output.FitFileExporter
-import java.io.File
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -42,7 +40,7 @@ class DataProcessor(private val applicationContext: Context) {
         private const val FILTERING_FACTOR = 0.1
         private const val CONJUGATE_FILTERING_FACTOR = 1.0 - FILTERING_FACTOR
 
-        private const val DATABASE_NAME = "nearow"
+        const val DATABASE_NAME = "nearow"
 
         /**
          * Return smallest power of two greater than or equal to n
@@ -76,13 +74,6 @@ class DataProcessor(private val applicationContext: Context) {
          */
         @UiThread
         fun onLocationUpdate(location: Location, totalDistance: Float)
-
-        /**
-         * Called once a session has been finished and successfully
-         * exported to a file.
-         */
-        @UiThread
-        fun onTrackExported(exportedFile: File)
     }
 
     private var listener: DataUpdateListener? = null
@@ -293,17 +284,5 @@ class DataProcessor(private val applicationContext: Context) {
 
         mTracking = false
         return true
-    }
-
-    /**
-     * Export the current rowing session into a FIT activity file
-     */
-    fun exportSession() {
-        scope.launch {
-            val file = FitFileExporter(applicationContext).exportTrackPoints(
-                track.loadSession(currentSessionId)
-            )
-            listener?.onTrackExported(file)
-        }
     }
 }

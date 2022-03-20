@@ -10,8 +10,8 @@ import androidx.room.Query
  */
 @Dao
 interface TrackDao {
-    @Query("SELECT DISTINCT trackId FROM records")
-    suspend fun getSessions(): List<Int>
+    @Query("SELECT trackId, MIN(timestamp) AS timestamp FROM records GROUP BY trackId ORDER BY timestamp DESC")
+    suspend fun getSessions(): List<Session>
 
     @Query("SELECT MAX(trackId) FROM RECORDS")
     suspend fun getLastSessionId(): Int?

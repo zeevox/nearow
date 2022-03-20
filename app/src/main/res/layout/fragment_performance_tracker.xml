@@ -1,10 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/pm_toolbar"
+            android:layout_width="match_parent"
+            app:title="@string/app_name"
+            android:layout_height="?attr/actionBarSize"
+            app:menu="@menu/menu_pm_toolbar" />
+    </com.google.android.material.appbar.AppBarLayout>
+
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -39,11 +53,10 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/split_frame"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_horizontal"
-            android:id="@+id/split_frame"
-            android:visibility="gone"
             android:orientation="vertical"
             android:padding="@dimen/default_padding">
 
@@ -78,12 +91,11 @@
             tools:text="35:23.7" />
 
         <LinearLayout
+            android:id="@+id/distance_frame"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:gravity="center_horizontal"
             android:orientation="horizontal"
-            android:id="@+id/distance_frame"
-            android:visibility="gone"
             android:padding="@dimen/default_padding">
 
 
@@ -107,14 +119,14 @@
         </LinearLayout>
 
         <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/start_stop_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
             android:layout_margin="@dimen/default_padding"
             android:text="@string/action_start_tracking"
-            android:id="@+id/start_stop_button"
-            app:icon="@android:drawable/ic_media_play"
-            app:backgroundTint="@color/start_green"/>
+            app:backgroundTint="@color/start_green"
+            app:icon="@android:drawable/ic_media_play" />
 
     </LinearLayout>
-</ScrollView>
+</LinearLayout>

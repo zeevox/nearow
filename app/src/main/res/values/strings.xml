@@ -11,4 +11,13 @@
     <string name="action_stop_tracking">Stop tracking</string>
     <string name="dialog_msg_gps_permission_denied">Because GPS location permission has been denied, GPS tracking is not possible. Only stroke rate will be collected.</string>
     <string name="dialog_title_gps_permission_denied">Location access denied</string>
+    <string name="action_enable_gps">GPS</string>
+    <string name="action_view_past_sessions">View sessions</string>
+    <string name="action_view_past_sessions_condensed">History</string>
+    <string name="rv_loading_text">Getting your sessions</string>
+    <string name="rv_empty_text">Nothing to see here :(</string>
+    <string name="rv_error_text">An error occurred.</string>
+    <string name="action_retry">Retry</string>
+    <string name="info_use_long_press_to_stop">Long press to stop recording</string>
+    <string name="info_loading_session_export">Preparing export...</string>
 </resources>
