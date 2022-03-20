@@ -8,7 +8,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -70,12 +69,6 @@ class DataCollectionService : Service(), SensorEventListener {
     private var inForeground: Boolean = false
 
     /**
-     * Boolean used to determine whether there is a change in device configuration
-     * (e.g. orientation change) that has caused the associated activity to be restarted.
-     */
-    private var mChangingConfiguration = false
-
-    /**
      * Contains parameters used by [FusedLocationProviderClient].
      */
     private lateinit var mLocationRequest: LocationRequest
@@ -106,6 +99,11 @@ class DataCollectionService : Service(), SensorEventListener {
          * than this value.
          */
         private const val FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS: Long = 0L
+
+        /**
+         * Logcat tag used for debugging
+         */
+        private val TAG = DataCollectionService::class.java.simpleName
     }
 
     /** https://developer.android.com/guide/components/bound-services#Binder **/
@@ -121,19 +119,13 @@ class DataCollectionService : Service(), SensorEventListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startService(Intent(applicationContext, DataCollectionService::class.java))
-        startForeground(
-            NOTIFICATION_ID,
-            NotificationUtils.getForegroundServiceNotification(this)
-        )
-        inForeground = true
         return START_STICKY
     }
 
     override fun onCreate() {
         super.onCreate()
 
-        Log.d(javaClass.simpleName, "Starting Nero data collection service...")
+        Log.i(TAG, "Starting Nero data collection service")
 
         mNotificationManager = NotificationManagerCompat.from(this)
 
@@ -150,6 +142,9 @@ class DataCollectionService : Service(), SensorEventListener {
             // check that access has been granted to the user's geolocation before starting gps collection
             if (isGpsPermissionGranted()) enableGps()
         }
+
+        startService(Intent(applicationContext, DataCollectionService::class.java))
+        startForeground()
     }
 
     /**
@@ -157,9 +152,8 @@ class DataCollectionService : Service(), SensorEventListener {
      * The service should cease to be a foreground service when that happens.
      */
     override fun onBind(intent: Intent?): IBinder {
-        stopForeground(true)
-        inForeground = false
-        mChangingConfiguration = false
+        Log.i(TAG, "Client bound to service")
+        stopForeground()
         return binder
     }
 
@@ -168,9 +162,8 @@ class DataCollectionService : Service(), SensorEventListener {
      * The service should cease to be a foreground service when that happens.
      */
     override fun onRebind(intent: Intent?) {
-        stopForeground(true)
-        inForeground = false
-        mChangingConfiguration = false
+        Log.i(TAG, "Client rebound to service")
+        stopForeground()
         super.onRebind(intent)
     }
 
@@ -180,21 +173,42 @@ class DataCollectionService : Service(), SensorEventListener {
      * nothing. Otherwise, we make this service a foreground service.
      */
     override fun onUnbind(intent: Intent?): Boolean {
-        Log.i(javaClass.simpleName, "Last client unbound from service")
+        Log.i(TAG, "Last client unbound from service")
 
-        if (!mChangingConfiguration && mDataProcessor.isRecording) {
-            startForeground(
-                NOTIFICATION_ID,
-                NotificationUtils.getForegroundServiceNotification(this)
-            )
-            inForeground = true
-        }
+        if (mDataProcessor.isRecording) startForeground() else stopForeground()
         return true
     }
 
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        mChangingConfiguration = true
+    /**
+     * Switch the [DataCollectionService] to a foreground service so that sensor
+     * and location updates can continue to be processed even though the
+     * application UI has gone out of view
+     */
+    private fun startForeground() {
+        Log.i(TAG, "Switching to foreground service")
+        startForeground(
+            NOTIFICATION_ID,
+            NotificationUtils.getForegroundServiceNotification(this)
+        )
+
+        // Pushing notifications on main thread is warned against by StrictMode
+        CoroutineScope(Dispatchers.Default).launch {
+            mNotificationManager.notify(
+                NOTIFICATION_ID,
+                NotificationUtils.getForegroundServiceNotification(this@DataCollectionService)
+            )
+        }
+
+        inForeground = true
+    }
+
+    /**
+     * Stop being a foreground service if the GUI comes back into view.
+     */
+    private fun stopForeground() {
+        Log.i(TAG, "Cancelling foreground service")
+        stopForeground(true)
+        inForeground = false
     }
 
     fun setDataUpdateListener(listener: DataProcessor.DataUpdateListener) =
@@ -203,13 +217,14 @@ class DataCollectionService : Service(), SensorEventListener {
     private fun registerSensorListener() {
         CoroutineScope(Dispatchers.IO).launch {
             mSensorManager = getSystemService(AppCompatActivity.SENSOR_SERVICE) as SensorManager
-            mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)?.also { accelerometer ->
-                mSensorManager.registerListener(
-                    this@DataCollectionService,
-                    accelerometer,
-                    ACCELEROMETER_SAMPLING_DELAY
-                )
-            }
+            mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
+                ?.also { accelerometer ->
+                    mSensorManager.registerListener(
+                        this@DataCollectionService,
+                        accelerometer,
+                        ACCELEROMETER_SAMPLING_DELAY
+                    )
+                }
         }
     }
 
@@ -229,7 +244,7 @@ class DataCollectionService : Service(), SensorEventListener {
      * https://github.com/android/location-samples/blob/main/LocationUpdatesForegroundService/app/src/main/java/com/google/android/gms/location/sample/locationupdatesforegroundservice/LocationUpdatesService.java
      */
     private fun initGpsClient() {
-        Log.d(javaClass.simpleName, "Requesting GPS location updates")
+        Log.i(TAG, "Initialising GPS client")
 
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
@@ -244,14 +259,30 @@ class DataCollectionService : Service(), SensorEventListener {
     }
 
     /**
+     * Start requesting GPS location updates
+     */
+    fun enableGps() {
+        Log.i(TAG, "Requesting GPS location updates")
+        try {
+            mFusedLocationClient.requestLocationUpdates(
+                mLocationRequest,
+                mLocationCallback,
+                Looper.getMainLooper()
+            )
+        } catch (unlikely: SecurityException) {
+            Log.e(TAG, "Lost location permission. Could not request updates.", unlikely)
+        }
+    }
+
+    /**
      * Stop requesting location updates
      */
     fun disableGps() {
+        Log.i(TAG, "Requesting GPS location updates to stop")
         try {
             mFusedLocationClient.removeLocationUpdates(mLocationCallback)
         } catch (unlikely: SecurityException) {
-            Log.e(javaClass.simpleName,
-                "Lost location permission. Could not remove updates. $unlikely")
+            Log.e(TAG, "Lost location permission. Could not remove updates.", unlikely)
         }
     }
 
@@ -270,29 +301,11 @@ class DataCollectionService : Service(), SensorEventListener {
      * Called by the system to notify a Service that it is no longer used and is being removed.  The
      * service should clean up any resources it holds (threads, registered
      * receivers, etc) at this point.  Upon return, there will be no more calls
-     * in to this Service object and it is effectively dead.  Do not call this method directly.
+     * in to this Service object and it is effectively dead.
      */
     override fun onDestroy() {
         disableGps()
         super.onDestroy()
-    }
-
-    /**
-     * Start requesting GPS location updates
-     */
-    fun enableGps() {
-        try {
-            mFusedLocationClient.requestLocationUpdates(
-                mLocationRequest,
-                mLocationCallback,
-                Looper.getMainLooper()
-            )
-        } catch (unlikely: SecurityException) {
-            Log.e(
-                javaClass.simpleName,
-                "Lost location permission. Could not request updates. $unlikely"
-            )
-        }
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
@@ -301,17 +314,11 @@ class DataCollectionService : Service(), SensorEventListener {
         when (event.sensor.type) {
             Sensor.TYPE_LINEAR_ACCELERATION -> mDataProcessor.addAccelerometerReading(event.values)
         }
-
-        if (inForeground) CoroutineScope(Dispatchers.Default).launch {
-            mNotificationManager.notify(
-                NOTIFICATION_ID,
-                NotificationUtils.getForegroundServiceNotification(this@DataCollectionService)
-            )
-        }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
         // TODO accuracy handling?
+        Log.w(TAG, "Unhandled ${sensor?.name} sensor accuracy change to $accuracy")
     }
 
     private class NotificationUtils private constructor() {

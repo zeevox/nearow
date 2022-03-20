@@ -13,7 +13,8 @@ import net.zeevox.nearow.db.model.Session
 /**
  * [ListAdapter] that can display a [Session].
  */
-class SessionsListAdapter(val clickListener: (Session) -> Unit) : ListAdapter<Session, SessionsListAdapter.ViewHolder>(SessionDiff()) {
+class SessionsListAdapter(val clickListener: (Session) -> Unit) :
+    ListAdapter<Session, SessionsListAdapter.ViewHolder>(SessionDiff()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder =
         ViewHolder(FragmentSessionsBinding.inflate(LayoutInflater.from(parent.context),

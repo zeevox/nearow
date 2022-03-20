@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.os.SystemClock
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -60,6 +61,13 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
         }
     }
 
+    companion object {
+        /**
+         * Logcat tag used for debugging
+         */
+        private val TAG = PerformanceMonitorFragment::class.java.simpleName
+    }
+
     /**
      * Register the permissions callback, which handles the user's response to the
      * system permissions dialog.
@@ -71,7 +79,7 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
         ) { isGranted: Boolean ->
             // if permission has been granted return to where we left off and start the service
             if (isGranted) {
-                if (!mBound) bindAndStartDataCollectionService()
+                if (!mBound) startAndBindToDataCollectionService()
             } else {
                 // create an alert (dialog) to explain functionality loss since permission has been denied
                 val permissionDeniedDialog = this.let {
@@ -192,10 +200,7 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
     }
 
     /** Bind to LocalService. If it is not running, automatically start it up */
-    private fun bindAndStartDataCollectionService() {
-        val dataCollectionServiceIntent =
-            Intent(requireContext(), DataCollectionService::class.java)
-
+    private fun startAndBindToDataCollectionService() {
         if (ActivityCompat.checkSelfPermission(
                 requireContext(),
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -206,16 +211,23 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
             return
         }
 
+        val dataCollectionServiceIntent =
+            Intent(requireContext(), DataCollectionService::class.java)
+
+        // mark the service as started so that it is not killed
+        // https://stackoverflow.com/a/43742797
+        // the startService and startForegroundService methods can be called
+        // as many times as necessary -- there will always only be one
+        // instance of the service running
+        // https://developer.android.com/guide/components/services#StartingAService
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            requireContext().startForegroundService(dataCollectionServiceIntent)
+        else requireContext().startService(dataCollectionServiceIntent)
+
         // bind and automatically create the service
         requireContext().bindService(dataCollectionServiceIntent,
             connection,
             Context.BIND_AUTO_CREATE)
-
-        // mark the service as started so that it is not killed
-        // https://stackoverflow.com/a/43742797
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            requireContext().startForegroundService(dataCollectionServiceIntent)
-        else requireContext().startService(dataCollectionServiceIntent)
     }
 
     /**
@@ -231,14 +243,16 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
      * Called when the Fragment is visible to the user.
      */
     override fun onStart() {
+        Log.i(TAG, "Fragment started")
         super.onStart()
-        bindAndStartDataCollectionService()
+        startAndBindToDataCollectionService()
     }
 
     /**
      * Called when the Fragment is no longer started.
      */
     override fun onStop() {
+        Log.i(TAG, "Fragment stopped")
         super.onStop()
         requireContext().unbindService(connection)
         mBound = false

@@ -1,5 +1,6 @@
 package net.zeevox.nearow.ui
 
+import android.content.Intent
 import android.os.Bundle
 import android.os.StrictMode
 import android.os.StrictMode.VmPolicy
@@ -9,6 +10,7 @@ import androidx.fragment.app.add
 import androidx.fragment.app.commit
 import net.zeevox.nearow.R
 import net.zeevox.nearow.databinding.ActivityMainBinding
+import net.zeevox.nearow.input.DataCollectionService
 import net.zeevox.nearow.ui.fragment.PerformanceMonitorFragment
 
 
@@ -49,5 +51,14 @@ class MainActivity : AppCompatActivity() {
                 add<PerformanceMonitorFragment>(R.id.fragment_container_view)
             }
         }
+    }
+
+    /**
+     * Called when the activity has detected the user's press of the back
+     * key.
+     **/
+    override fun onBackPressed() {
+        stopService(Intent(this@MainActivity, DataCollectionService::class.java))
+        super.onBackPressed()
     }
 }
