@@ -1,9 +1,10 @@
 package net.zeevox.nearow.input
 
 import android.Manifest
+import android.app.Notification
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -13,35 +14,60 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.google.android.gms.location.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import net.zeevox.nearow.R
 import net.zeevox.nearow.data.DataProcessor
 
 
 // initially based on https://www.raywenderlich.com/10838302-sensors-tutorial-for-android-getting-started
 
+/**
+ * [DataCollectionService] is a foreground service that receives sensor
+ * and location updates and handles the lifecycle of the tracking process
+ */
 class DataCollectionService : Service(), SensorEventListener {
 
-    private lateinit var sensorManager: SensorManager
+    /**
+     * [SensorManager] is a gateway to access device's hardware sensors
+     */
+    private lateinit var mSensorManager: SensorManager
 
+    /**
+     * [NotificationManagerCompat] is a wrapping library around [NotificationManager]
+     * Used to push foreground service notifications, which are necessary
+     * to prevent the service from getting killed
+     */
     private lateinit var mNotificationManager: NotificationManagerCompat
 
-    // service config flags of sorts
-    private var gpsEnabled = true
-
-    private var inForeground = false
-
+    /**
+     * Instance of [DataProcessor] to which we pass sensor
+     * and location updates for number-crunching
+     */
     private lateinit var mDataProcessor: DataProcessor
+
+    /**
+     * A direct reference to the [DataProcessor] currently in use by the [DataCollectionService]
+     */
     val dataProcessor: DataProcessor
         get() = mDataProcessor
+
+    /**
+     * Whether this instance of the [DataCollectionService]
+     * is currently running as a foreground service
+     */
+    private var inForeground: Boolean = false
 
     /**
      * Boolean used to determine whether there is a change in device configuration
@@ -65,13 +91,7 @@ class DataCollectionService : Service(), SensorEventListener {
     private lateinit var mLocationCallback: LocationCallback
 
     companion object {
-        const val KEY_SHOW_NOTIFICATION = "background"
-        const val KEY_ENABLE_GPS = "enable_gps"
-        const val KEY_NOTIFICATION_ID = "notificationId"
         const val NOTIFICATION_ID = 7652863
-        const val KEY_NOTIFICATION_STOP_ACTION = "net.zeevox.nearow.NOTIFICATION_STOP"
-        const val NOTIFICATION_ACTIVITY_REQUEST_CODE = 0
-        const val NOTIFICATION_STOP_REQUEST_CODE = 2
 
         // 20,000 us => ~50Hz sampling
         const val ACCELEROMETER_SAMPLING_DELAY = 20000
@@ -101,9 +121,12 @@ class DataCollectionService : Service(), SensorEventListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        intent?.let {
-            gpsEnabled = it.getBooleanExtra(KEY_ENABLE_GPS, true)
-        }
+        startService(Intent(applicationContext, DataCollectionService::class.java))
+        startForeground(
+            NOTIFICATION_ID,
+            NotificationUtils.getForegroundServiceNotification(this)
+        )
+        inForeground = true
         return START_STICKY
     }
 
@@ -125,10 +148,8 @@ class DataCollectionService : Service(), SensorEventListener {
 
             // measuring GPS is neither always needed (e.g. erg) nor permitted by user
             // check that access has been granted to the user's geolocation before starting gps collection
-            if (gpsEnabled && isGpsPermissionGranted()) enableGps()
+            if (isGpsPermissionGranted()) enableGps()
         }
-
-        startService(Intent(applicationContext, DataCollectionService::class.java))
     }
 
     /**
@@ -181,9 +202,9 @@ class DataCollectionService : Service(), SensorEventListener {
 
     private fun registerSensorListener() {
         CoroutineScope(Dispatchers.IO).launch {
-            sensorManager = getSystemService(AppCompatActivity.SENSOR_SERVICE) as SensorManager
-            sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)?.also { accelerometer ->
-                sensorManager.registerListener(
+            mSensorManager = getSystemService(AppCompatActivity.SENSOR_SERVICE) as SensorManager
+            mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)?.also { accelerometer ->
+                mSensorManager.registerListener(
                     this@DataCollectionService,
                     accelerometer,
                     ACCELEROMETER_SAMPLING_DELAY
@@ -293,21 +314,51 @@ class DataCollectionService : Service(), SensorEventListener {
         // TODO accuracy handling?
     }
 
-    class ActionListener : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
+    private class NotificationUtils private constructor() {
+        companion object {
+            private const val CHANNEL_ID = "tracking_channel"
 
-            if (intent == null || intent.action == null) return
-
-            if (intent.action.equals(KEY_NOTIFICATION_STOP_ACTION)) context?.let {
-                val notificationManager =
-                    context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                val dataServiceIntent = Intent(context, DataCollectionService::class.java)
-                context.stopService(dataServiceIntent)
-                val notificationId = intent.getIntExtra(KEY_NOTIFICATION_ID, -1)
-                if (notificationId != -1) notificationManager.cancel(notificationId)
+            @RequiresApi(Build.VERSION_CODES.O)
+            internal fun createServiceNotificationChannel(context: Context) {
+                val notificationManager = NotificationManagerCompat.from(context)
+                notificationManager.createNotificationChannel(
+                    NotificationChannel(
+                        CHANNEL_ID,
+                        context.getString(R.string.notification_channel_tracking_service),
+                        NotificationManager.IMPORTANCE_MIN
+                    ).apply {
+                        enableLights(false)
+                        setSound(null, null)
+                        enableVibration(false)
+                        vibrationPattern = longArrayOf(0L)
+                        setShowBadge(false)
+                    }
+                )
             }
 
+            internal fun getForegroundServiceNotification(context: Context): Notification {
+
+                val notificationBuilder =
+                    NotificationCompat.Builder(context, CHANNEL_ID).setAutoCancel(true)
+                        .setDefaults(Notification.DEFAULT_ALL)
+                        .setContentTitle(context.resources.getString(R.string.app_name))
+                        .setContentText(context.getString(R.string.notification_background_service_running))
+                        .setWhen(System.currentTimeMillis())
+                        .setOngoing(true)
+                        .setVibrate(longArrayOf(0L))
+                        .setSound(null)
+                        .setSmallIcon(R.mipmap.ic_launcher_round)
+
+                // Notifications channel required for Android 8.0+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    createServiceNotificationChannel(context)
+                    notificationBuilder.setChannelId(CHANNEL_ID)
+                }
+
+                return notificationBuilder.build()
+            }
         }
+
     }
 
 }

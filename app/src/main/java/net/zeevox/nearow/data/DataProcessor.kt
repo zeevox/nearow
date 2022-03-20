@@ -16,24 +16,27 @@ import net.zeevox.nearow.input.DataCollectionService
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-class DataProcessor(private val applicationContext: Context) {
+class DataProcessor(applicationContext: Context) {
 
     companion object {
         // rough estimate for sample rate
         private const val SAMPLE_RATE = 1000000 / DataCollectionService.ACCELEROMETER_SAMPLING_DELAY
 
-        // roughly 50Hz sampling - max 10 second buffer -> 12spm min detection (Nyquist)
+        // how long of a buffer to store, roughly, in seconds
+        // 10 second buffer -> 12spm min detection (Nyquist)
+        private const val ACCEL_BUFFER_SECONDS: Int = 10
+
         // autocorrelation works best when the buffer size is a power of two
-        private val ACCEL_BUFFER_SIZE = nextPowerOf2(SAMPLE_RATE * 10)
+        private val ACCEL_BUFFER_SIZE = nextPowerOf2(SAMPLE_RATE * ACCEL_BUFFER_SECONDS)
 
         // smooth jumpy stroke rate -- take moving average of this period
         private const val STROKE_RATE_MOV_AVG_PERIOD = 3
 
         // milliseconds between stroke rate recalculations
-        private const val STROKE_RATE_RECALCULATION_PERIOD = 1000L
+        private const val STROKE_RATE_RECALCULATION_PERIOD: Long = 1000L
 
         // seconds to wait before starting stroke rate calculations
-        private const val STROKE_RATE_INITIAL_DELAY = 3000L
+        private const val STROKE_RATE_INITIAL_DELAY = ACCEL_BUFFER_SECONDS * 1000L / 2
 
         // magic number determined empirically
         // https://stackoverflow.com/a/1736623
@@ -55,6 +58,9 @@ class DataProcessor(private val applicationContext: Context) {
             return p
         }
 
+        /**
+         * Calculate the magnitude of a three-dimensional vector
+         */
         fun magnitude(triple: DoubleArray): Double =
             sqrt(triple[0] * triple[0] + triple[1] * triple[1] + triple[2] * triple[2])
     }
@@ -198,8 +204,8 @@ class DataProcessor(private val applicationContext: Context) {
     fun addGpsReading(location: Location) {
         workerScope.launch {
             // sum total distance travelled
-            if (this@DataProcessor::mLocation.isInitialized && mTracking) totalDistance += location.distanceTo(
-                mLocation)
+            if (this@DataProcessor::mLocation.isInitialized && mTracking)
+                totalDistance += location.distanceTo(mLocation)
 
             // save this for calculating the distance travelled when next GPS measurement comes in
             mLocation = location

@@ -196,14 +196,11 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
         val dataCollectionServiceIntent =
             Intent(requireContext(), DataCollectionService::class.java)
 
-        dataCollectionServiceIntent.putExtra(DataCollectionService.KEY_SHOW_NOTIFICATION, false)
-
         if (ActivityCompat.checkSelfPermission(
                 requireContext(),
                 Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-        ) dataCollectionServiceIntent.putExtra(DataCollectionService.KEY_ENABLE_GPS, false)
-        else {
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
             // request GPS permission, callback will re-call this function to start the service
             requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
             return
