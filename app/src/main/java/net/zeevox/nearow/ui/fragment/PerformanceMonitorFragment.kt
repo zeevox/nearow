@@ -13,7 +13,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.os.SystemClock
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -261,10 +260,11 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
      * Called when a new GPS fix is obtained
      */
     override fun onLocationUpdate(location: Location, totalDistance: Float) {
-        Log.d(javaClass.simpleName, "Received new location update")
-        binding.splitFrame.visibility = View.VISIBLE
-        binding.distanceFrame.visibility = View.VISIBLE
-        binding.split.text = UnitConverter.speedToSplitFormatted(location.speed)
-        binding.distance.text = String.format("%.0f", totalDistance)
+        binding.apply {
+            splitFrame.visibility = View.VISIBLE
+            distanceFrame.visibility = View.VISIBLE
+            split.text = UnitConverter.speedToSplitFormatted(location.speed)
+            distance.text = String.format("%.0f", totalDistance)
+        }
     }
 }

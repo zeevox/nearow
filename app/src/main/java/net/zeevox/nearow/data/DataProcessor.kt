@@ -111,14 +111,14 @@ class DataProcessor(private val applicationContext: Context) {
     /**
      * Perform CPU-intensive tasks on the `Default` coroutine scope
      */
-    private val scope = CoroutineScope(Dispatchers.Default)
+    private val workerScope = CoroutineScope(Dispatchers.Default)
 
     fun setListener(listener: DataUpdateListener) {
         this.listener = listener
     }
 
     private val strokeRateCalculator: Job =
-        scope.launch {
+        workerScope.launch {
             // after a three-second stabilisation period
             delay(STROKE_RATE_INITIAL_DELAY)
             // recalculate stroke rate roughly once per second
@@ -167,21 +167,27 @@ class DataProcessor(private val applicationContext: Context) {
     }
 
     fun addAccelerometerReading(readings: FloatArray) {
-        // ramp-speed filtering https://stackoverflow.com/a/1736623
-        val filtered =
-            DoubleArray(3) { readings[it] * FILTERING_FACTOR + lastAccelReading[it] * CONJUGATE_FILTERING_FACTOR }
+        // saving of accel value is async so record timestamp now
+        val timestamp = System.currentTimeMillis()
 
-        // calculate magnitude of the acceleration
-        val magnitude = magnitude(filtered)
+        // launch processing on worker coroutine scope
+        workerScope.launch {
+            // ramp-speed filtering https://stackoverflow.com/a/1736623
+            val filtered =
+                DoubleArray(3) { readings[it] * FILTERING_FACTOR + lastAccelReading[it] * CONJUGATE_FILTERING_FACTOR }
 
-        // add the acceleration reading to the end of the buffer; displace an old value
-        accelReadings.addLast(magnitude)
+            // calculate magnitude of the acceleration
+            val magnitude = magnitude(filtered)
 
-        // store the corresponding timestamp as well
-        timestamps.addLast(((System.currentTimeMillis() - startTimestamp) / 1000L).toDouble())
+            // add the acceleration reading to the end of the buffer; displace an old value
+            accelReadings.addLast(magnitude)
 
-        // save current readings into memory for when next readings come in
-        System.arraycopy(filtered, 0, lastAccelReading, 0, 3)
+            // store the corresponding timestamp as well
+            timestamps.addLast(((timestamp - startTimestamp) / 1000L).toDouble())
+
+            // save current readings into memory for when next readings come in
+            System.arraycopy(filtered, 0, lastAccelReading, 0, 3)
+        }
     }
 
     /**
@@ -190,15 +196,20 @@ class DataProcessor(private val applicationContext: Context) {
      * and stores current location in memory
      */
     fun addGpsReading(location: Location) {
-        // sum total distance travelled
-        if (this::mLocation.isInitialized && mTracking) totalDistance += location.distanceTo(
-            mLocation)
+        workerScope.launch {
+            // sum total distance travelled
+            if (this@DataProcessor::mLocation.isInitialized && mTracking) totalDistance += location.distanceTo(
+                mLocation)
 
-        // inform our listener of a new GPS location
-        listener?.onLocationUpdate(location, totalDistance)
+            // save this for calculating the distance travelled when next GPS measurement comes in
+            mLocation = location
 
-        // save this for calculating the distance travelled when next GPS measurement comes in
-        mLocation = location
+            // handle listener on main thread
+            withContext(Dispatchers.Main) {
+                // inform our listener of a new GPS location
+                listener?.onLocationUpdate(location, totalDistance)
+            }
+        }
     }
 
     /**

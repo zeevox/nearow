@@ -20,6 +20,9 @@ import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.location.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import net.zeevox.nearow.data.DataProcessor
 
 
@@ -181,13 +184,15 @@ class DataCollectionService : Service(), SensorEventListener {
         mDataProcessor.setListener(listener)
 
     private fun registerSensorListener() {
-        sensorManager = getSystemService(AppCompatActivity.SENSOR_SERVICE) as SensorManager
-        sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)?.also { accelerometer ->
-            sensorManager.registerListener(
-                this,
-                accelerometer,
-                ACCELEROMETER_SAMPLING_DELAY
-            )
+        CoroutineScope(Dispatchers.IO).launch {
+            sensorManager = getSystemService(AppCompatActivity.SENSOR_SERVICE) as SensorManager
+            sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)?.also { accelerometer ->
+                sensorManager.registerListener(
+                    this@DataCollectionService,
+                    accelerometer,
+                    ACCELEROMETER_SAMPLING_DELAY
+                )
+            }
         }
     }
 
