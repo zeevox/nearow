@@ -1,6 +1,8 @@
 package net.zeevox.nearow.ui
 
 import android.os.Bundle
+import android.os.StrictMode
+import android.os.StrictMode.VmPolicy
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.add
@@ -19,6 +21,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var fragment: Fragment
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        StrictMode.setThreadPolicy(
+            StrictMode.ThreadPolicy.Builder()
+                .detectAll()
+                .penaltyLog()
+                .build())
+        StrictMode.setVmPolicy(VmPolicy.Builder()
+            .detectLeakedSqlLiteObjects()
+            .detectLeakedClosableObjects()
+            .penaltyLog()
+            .penaltyDeath()
+            .build())
+
         setTheme(R.style.Theme_Nearow)
 
         super.onCreate(savedInstanceState)

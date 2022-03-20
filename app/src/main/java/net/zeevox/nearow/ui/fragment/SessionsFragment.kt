@@ -87,16 +87,20 @@ class SessionsFragment : Fragment() {
             ).apply { show() }
 
             // actually export the activity to a file
-            val file: File = withContext(Dispatchers.Default) {
-                 FitFileExporter(requireContext())
-                    .exportTrackPoints(track.loadSession(session.trackId))
+            val file: File? = withContext(Dispatchers.Default) {
+                val sessionData = track.loadSession(session.trackId)
+                if (sessionData.size <= 2) null
+                else FitFileExporter(requireContext())
+                    .exportTrackPoints(sessionData)
             }
 
             // cancel the snackbar once we have finished exporting
             snackbar.dismiss()
 
-            // do things with the exported activity file
-            onTrackExported(file)
+            if (file == null) Snackbar.make(requireView(),
+                getString(R.string.info_track_too_short),
+                Snackbar.LENGTH_LONG).show()
+            else onTrackExported(file)
         }
     }
 

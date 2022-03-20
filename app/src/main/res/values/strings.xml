@@ -20,4 +20,5 @@
     <string name="action_retry">Retry</string>
     <string name="info_use_long_press_to_stop">Long press to stop recording</string>
     <string name="info_loading_session_export">Preparing export...</string>
+    <string name="info_track_too_short">Activity too short to export</string>
 </resources>

@@ -13,12 +13,12 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Binder
-import android.os.Build
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
 import com.google.android.gms.location.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,11 +32,12 @@ class DataCollectionService : Service(), SensorEventListener {
 
     private lateinit var sensorManager: SensorManager
 
-    private lateinit var mNotificationAdministrator: NotificationAdministrator
+    private lateinit var mNotificationManager: NotificationManagerCompat
 
     // service config flags of sorts
-    private var showNotification = false
     private var gpsEnabled = true
+
+    private var inForeground = false
 
     private lateinit var mDataProcessor: DataProcessor
     val dataProcessor: DataProcessor
@@ -47,7 +48,6 @@ class DataCollectionService : Service(), SensorEventListener {
      * (e.g. orientation change) that has caused the associated activity to be restarted.
      */
     private var mChangingConfiguration = false
-    private var mRequestingLocationUpdates = false
 
     /**
      * Contains parameters used by [FusedLocationProviderClient].
@@ -102,7 +102,6 @@ class DataCollectionService : Service(), SensorEventListener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         intent?.let {
-            showNotification = it.getBooleanExtra(KEY_SHOW_NOTIFICATION, false)
             gpsEnabled = it.getBooleanExtra(KEY_ENABLE_GPS, true)
         }
         return START_STICKY
@@ -113,7 +112,7 @@ class DataCollectionService : Service(), SensorEventListener {
 
         Log.d(javaClass.simpleName, "Starting Nero data collection service...")
 
-        mNotificationAdministrator = NotificationAdministrator(this, application)
+        mNotificationManager = NotificationManagerCompat.from(this)
 
         // start the data processor before registering sensor and GPS
         // listeners so that it is ready to receive values as soon as
@@ -138,6 +137,7 @@ class DataCollectionService : Service(), SensorEventListener {
      */
     override fun onBind(intent: Intent?): IBinder {
         stopForeground(true)
+        inForeground = false
         mChangingConfiguration = false
         return binder
     }
@@ -148,6 +148,7 @@ class DataCollectionService : Service(), SensorEventListener {
      */
     override fun onRebind(intent: Intent?) {
         stopForeground(true)
+        inForeground = false
         mChangingConfiguration = false
         super.onRebind(intent)
     }
@@ -160,18 +161,13 @@ class DataCollectionService : Service(), SensorEventListener {
     override fun onUnbind(intent: Intent?): Boolean {
         Log.i(javaClass.simpleName, "Last client unbound from service")
 
-        if (!mChangingConfiguration && mRequestingLocationUpdates)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                startForegroundService(
-                    Intent(
-                        this,
-                        DataCollectionService::class.java
-                    )
-                )
-        startForeground(
-            NOTIFICATION_ID,
-            mNotificationAdministrator.getForegroundServiceNotification()
-        )
+        if (!mChangingConfiguration && mDataProcessor.isRecording) {
+            startForeground(
+                NOTIFICATION_ID,
+                NotificationUtils.getForegroundServiceNotification(this)
+            )
+            inForeground = true
+        }
         return true
     }
 
@@ -232,7 +228,6 @@ class DataCollectionService : Service(), SensorEventListener {
     fun disableGps() {
         try {
             mFusedLocationClient.removeLocationUpdates(mLocationCallback)
-            mRequestingLocationUpdates = false
         } catch (unlikely: SecurityException) {
             Log.e(javaClass.simpleName,
                 "Lost location permission. Could not remove updates. $unlikely")
@@ -265,8 +260,6 @@ class DataCollectionService : Service(), SensorEventListener {
      * Start requesting GPS location updates
      */
     fun enableGps() {
-        mRequestingLocationUpdates = true
-
         try {
             mFusedLocationClient.requestLocationUpdates(
                 mLocationRequest,
@@ -274,7 +267,6 @@ class DataCollectionService : Service(), SensorEventListener {
                 Looper.getMainLooper()
             )
         } catch (unlikely: SecurityException) {
-            mRequestingLocationUpdates = false
             Log.e(
                 javaClass.simpleName,
                 "Lost location permission. Could not request updates. $unlikely"
@@ -289,10 +281,12 @@ class DataCollectionService : Service(), SensorEventListener {
             Sensor.TYPE_LINEAR_ACCELERATION -> mDataProcessor.addAccelerometerReading(event.values)
         }
 
-        if (showNotification) startForeground(
-            NOTIFICATION_ID,
-            mNotificationAdministrator.getForegroundServiceNotification()
-        ) else stopForeground(true)
+        if (inForeground) CoroutineScope(Dispatchers.Default).launch {
+            mNotificationManager.notify(
+                NOTIFICATION_ID,
+                NotificationUtils.getForegroundServiceNotification(this@DataCollectionService)
+            )
+        }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
