@@ -4,6 +4,7 @@ import android.content.Context
 import android.location.Location
 import android.os.Handler
 import android.os.Looper
+import androidx.annotation.Size
 import androidx.annotation.UiThread
 import androidx.annotation.WorkerThread
 import androidx.room.Room
@@ -14,7 +15,6 @@ import net.zeevox.nearow.db.model.TrackDao
 import net.zeevox.nearow.db.model.TrackPoint
 import net.zeevox.nearow.input.DataCollectionService
 import kotlin.math.sqrt
-import kotlin.random.Random
 
 class DataProcessor(applicationContext: Context) {
 
@@ -46,37 +46,44 @@ class DataProcessor(applicationContext: Context) {
         const val DATABASE_NAME = "nearow"
 
         /** Return smallest power of two greater than or equal to n */
-        private fun nextPowerOf2(n: Int): Int {
+        private fun nextPowerOf2(number: Int): Int {
             // base case already power of 2
-            if (n > 0 && n and n - 1 == 0) return n
+            if (number > 0 && (number and number - 1 == 0)) return number
 
-            // increment through powers of two until find one larger than n
-            var p = 1
-            while (p < n) p = p shl 1
-            return p
+            // increment through powers of two until we find one larger than n
+            var powerOfTwo = 1
+            while (powerOfTwo < number) powerOfTwo = powerOfTwo shl 1
+            return powerOfTwo
         }
 
         /** Calculate the magnitude of a three-dimensional vector */
-        fun magnitude(triple: DoubleArray): Double =
+        fun magnitude(@Size(3) triple: DoubleArray): Double =
             sqrt(triple[0] * triple[0] + triple[1] * triple[1] + triple[2] * triple[2])
     }
 
+    /**
+     * Interface used to allow a class to update user-facing elements when new data are available.
+     */
     interface DataUpdateListener {
         /**
-         * Called when stroke rate is recalculated [strokeRate]
-         * - estimated rate in strokes per minute
+         * Called when stroke rate is recalculated
+         * @param [strokeRate] estimated rate in strokes per minute
          */
         @UiThread fun onStrokeRateUpdate(strokeRate: Double)
 
         /**
-         * Called when a new GPS fix is obtained [location]
-         * - [Location] with all available GPS data [totalDistance]
-         * - new total distance travelled
+         * Called when a new GPS fix is obtained
+         * @param [location] [Location] with all available GPS data
+         * @param [totalDistance] new total distance travelled
          */
         @UiThread fun onLocationUpdate(location: Location, totalDistance: Float)
     }
 
     private var listener: DataUpdateListener? = null
+
+    fun setListener(listener: DataUpdateListener) {
+        this.listener = listener
+    }
 
     /** The application database */
     private val db: TrackDatabase =
@@ -103,10 +110,7 @@ class DataProcessor(applicationContext: Context) {
     /** Perform CPU-intensive tasks on the `Default` coroutine scope */
     private val workerScope = CoroutineScope(Dispatchers.Default)
 
-    fun setListener(listener: DataUpdateListener) {
-        this.listener = listener
-    }
-
+    /** A constantly-running job that periodically recalculates stroke rate */
     private val strokeRateCalculator: Job =
         workerScope.launch {
             // after a three-second stabilisation period
@@ -118,9 +122,9 @@ class DataProcessor(applicationContext: Context) {
 
                 getCurrentStrokeRate()
 
-                // this alternate thread cannot alter UI elements so post the callback onto the main
-                // thread
-                // https://stackoverflow.com/a/56852228
+                // DataUpdateListener.onStrokeRateUpdate *must* be called on the UI thread, as it is
+                // forbidden to alter UI elements from any other scope. As such, post the callback
+                // onto the main thread. Ref. https://stackoverflow.com/a/56852228
                 Handler(Looper.getMainLooper()).post {
                     listener?.onStrokeRateUpdate(smoothedStrokeRate)
                 }
@@ -130,7 +134,7 @@ class DataProcessor(applicationContext: Context) {
         }
 
     // somewhere to store acceleration readings
-    private val accelReadings = CircularDoubleBuffer(ACCEL_BUFFER_SIZE) { Random.nextDouble() }
+    private val accelReadings = CircularDoubleBuffer(ACCEL_BUFFER_SIZE)
 
     // and another one for their corresponding timestamps
     // this is so that we can calculate the sampling frequency
@@ -142,13 +146,16 @@ class DataProcessor(applicationContext: Context) {
     private val smoothedStrokeRate: Double
         get() = recentStrokeRates.average()
 
-    // store last acceleration reading for ramping
+    /** The last known acceleration reading, used for ramping */
     private val lastAccelReading = DoubleArray(3)
 
+    /** The last known location of the device */
     private lateinit var mLocation: Location
 
+    /** The total distance travelled over the course of this tracking session */
     private var totalDistance: Float = 0f
 
+    /** Reference all other timestamps relative to the instantiation of this class */
     private val startTimestamp = System.currentTimeMillis()
 
     init {
@@ -156,7 +163,8 @@ class DataProcessor(applicationContext: Context) {
         strokeRateCalculator.start()
     }
 
-    fun addAccelerometerReading(readings: FloatArray) {
+    /** Called when a new acceleration reading comes in, storing a damped value into the buffer */
+    fun addAccelerometerReading(@Size(3) readings: FloatArray) {
         // saving of accel value is async so record timestamp now
         val timestamp = System.currentTimeMillis()
 
@@ -169,11 +177,8 @@ class DataProcessor(applicationContext: Context) {
                         lastAccelReading[it] * CONJUGATE_FILTERING_FACTOR
                 }
 
-            // calculate magnitude of the acceleration
-            val magnitude = magnitude(filtered)
-
-            // add the acceleration reading to the end of the buffer; displace an old value
-            accelReadings.addLast(magnitude)
+            // append the magnitude of the damped acceleration to the rear of the circular buffer
+            accelReadings.addLast(magnitude(filtered))
 
             // store the corresponding timestamp as well
             timestamps.addLast(((timestamp - startTimestamp) / 1000L).toDouble())
@@ -190,7 +195,7 @@ class DataProcessor(applicationContext: Context) {
     fun addGpsReading(location: Location) {
         workerScope.launch {
             // sum total distance travelled
-            if (this@DataProcessor::mLocation.isInitialized && mTracking)
+            if (this@DataProcessor::mLocation.isInitialized && this@DataProcessor.isRecording)
                 totalDistance += location.distanceTo(mLocation)
 
             // save this for calculating the distance travelled when next GPS measurement comes in
@@ -231,7 +236,9 @@ class DataProcessor(applicationContext: Context) {
         recentStrokeRates.addLast(currentStrokeRate)
 
         // save into the database
-        if (mTracking) {
+        if (isRecording) {
+            // if there is no known last location or the last known location is too old (20s) to be
+            // useful, do not save location info into the database
             val trackPoint =
                 if (!this@DataProcessor::mLocation.isInitialized ||
                     System.currentTimeMillis() - mLocation.time > 20000L)
@@ -250,11 +257,9 @@ class DataProcessor(applicationContext: Context) {
         return currentStrokeRate
     }
 
-    private var mTracking = false
-
     /** Whether the [DataProcessor] is persisting values to the database */
-    val isRecording: Boolean
-        get() = mTracking
+    var isRecording: Boolean = false
+        private set
 
     /**
      * Start recording a new rowing session. Once this method is called, processed values such as
@@ -264,11 +269,11 @@ class DataProcessor(applicationContext: Context) {
      */
     fun startRecording(): Boolean {
         // if already recording, impossible
-        if (mTracking) return false
+        if (isRecording) return false
 
         currentSessionId = runBlocking { getNewSessionId() }
         totalDistance = 0f
-        mTracking = true
+        isRecording = true
         return true
     }
 
@@ -279,9 +284,9 @@ class DataProcessor(applicationContext: Context) {
      */
     fun stopRecording(): Boolean {
         // cannot stop if not yet started!
-        if (!mTracking) return false
+        if (!isRecording) return false
 
-        mTracking = false
+        isRecording = false
         return true
     }
 }
