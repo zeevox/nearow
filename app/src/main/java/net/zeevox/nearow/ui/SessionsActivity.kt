@@ -9,7 +9,6 @@ import net.zeevox.nearow.R
 import net.zeevox.nearow.databinding.ActivitySessionsBinding
 import net.zeevox.nearow.ui.fragment.SessionsFragment
 
-
 class SessionsActivity : AppCompatActivity() {
 
     /** for accessing UI elements, bind this activity to the XML */

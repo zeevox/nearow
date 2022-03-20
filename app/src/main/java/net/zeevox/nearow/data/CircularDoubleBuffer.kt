@@ -9,16 +9,14 @@ import java.util.concurrent.atomic.AtomicInteger
 class CircularDoubleBuffer(private val _size: Int) : Collection<Double> {
 
     /**
-     * Secondary constructor that supports initialising the circular buffer
-     * with data given by a user-provided function mapping indices to values.
+     * Secondary constructor that supports initialising the circular buffer with data given by a
+     * user-provided function mapping indices to values.
      */
     constructor(_size: Int, function: (Int) -> Double) : this(_size) {
         (0 until size).forEach { index -> addLast(function(index)) }
     }
 
-    /**
-     * Returns the size of the collection.
-     */
+    /** Returns the size of the collection. */
     override val size: Int
         get() = _size
 
@@ -37,15 +35,11 @@ class CircularDoubleBuffer(private val _size: Int) : Collection<Double> {
         pointer = (pointer + 1).mod(size)
     }
 
-    /**
-     * Get the most recently added value
-     */
+    /** Get the most recently added value */
     val head: Double
         get() = this[-1]
 
-    /**
-     * Get the oldest value in the buffer
-     */
+    /** Get the oldest value in the buffer */
     val tail: Double
         get() = this[0]
 
@@ -61,33 +55,24 @@ class CircularDoubleBuffer(private val _size: Int) : Collection<Double> {
 
     operator fun get(index: Int): Double = buffer[(pointer + index).mod(size)]
 
-    override fun iterator(): Iterator<Double> = object : Iterator<Double> {
-        private val index: AtomicInteger = AtomicInteger(0)
+    override fun iterator(): Iterator<Double> =
+        object : Iterator<Double> {
+            private val index: AtomicInteger = AtomicInteger(0)
 
-        /**
-         * Returns `true` if the iteration has more elements.
-         */
-        override fun hasNext(): Boolean = index.get() < size
+            /** Returns `true` if the iteration has more elements. */
+            override fun hasNext(): Boolean = index.get() < size
 
-        /**
-         * Returns the next element in the iteration.
-         */
-        override fun next(): Double = get(index.getAndIncrement())
-    }
+            /** Returns the next element in the iteration. */
+            override fun next(): Double = get(index.getAndIncrement())
+        }
 
-    /**
-     * Checks if the specified element is contained in this collection.
-     */
+    /** Checks if the specified element is contained in this collection. */
     override fun contains(element: Double): Boolean = buffer.any { it == element }
 
-    /**
-     * Checks if all elements in the specified collection are contained in this collection.
-     */
+    /** Checks if all elements in the specified collection are contained in this collection. */
     override fun containsAll(elements: Collection<Double>): Boolean =
         elements.all { element -> buffer.any { it == element } }
 
-    /**
-     * Returns `true` if the collection is empty (contains no elements), `false` otherwise.
-     */
+    /** Returns `true` if the collection is empty (contains no elements), `false` otherwise. */
     override fun isEmpty(): Boolean = size > 0
 }

@@ -1,9 +1,7 @@
 <resources>
     <string name="app_name">Nero</string>
-    <string name="stop_notifications">Stop Notifications</string>
     <string name="notification_background_service_running">Activity tracking in progress</string>
     <string name="notification_channel_tracking_service">Tracking service</string>
-    <string name="stroke_rate_display_placeholder_text" formatted="false">"%1$.1f\n%2$.2f"</string>
     <string name="action_start_tracking">Start tracking</string>
     <string name="units_pace_500">/500m</string>
     <string name="units_metres">m</string>
@@ -14,11 +12,7 @@
     <string name="action_enable_gps">GPS</string>
     <string name="action_view_past_sessions">View sessions</string>
     <string name="action_view_past_sessions_condensed">History</string>
-    <string name="rv_loading_text">Getting your sessions</string>
-    <string name="rv_empty_text">Nothing to see here :(</string>
-    <string name="rv_error_text">An error occurred.</string>
-    <string name="action_retry">Retry</string>
     <string name="info_use_long_press_to_stop">Long press to stop recording</string>
-    <string name="info_loading_session_export">Preparing export...</string>
+    <string name="info_loading_session_export">Preparing export…</string>
     <string name="info_track_too_short">Activity too short to export</string>
 </resources>

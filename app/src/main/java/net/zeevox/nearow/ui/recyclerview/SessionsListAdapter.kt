@@ -10,17 +10,13 @@ import androidx.recyclerview.widget.RecyclerView
 import net.zeevox.nearow.databinding.FragmentSessionsBinding
 import net.zeevox.nearow.db.model.Session
 
-/**
- * [ListAdapter] that can display a [Session].
- */
+/** [ListAdapter] that can display a [Session]. */
 class SessionsListAdapter(val clickListener: (Session) -> Unit) :
     ListAdapter<Session, SessionsListAdapter.ViewHolder>(SessionDiff()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder =
-        ViewHolder(FragmentSessionsBinding.inflate(LayoutInflater.from(parent.context),
-            parent, false)
-        )
-
+        ViewHolder(
+            FragmentSessionsBinding.inflate(LayoutInflater.from(parent.context), parent, false))
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item: Session = getItem(position)
@@ -45,5 +41,4 @@ class SessionsListAdapter(val clickListener: (Session) -> Unit) :
         override fun areContentsTheSame(oldItem: Session, newItem: Session): Boolean =
             oldItem.trackId == newItem.trackId
     }
-
 }

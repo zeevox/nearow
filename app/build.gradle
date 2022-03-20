@@ -76,14 +76,6 @@ dependencies {
 
     // Kotlin's dependencies
     implementation "androidx.core:core-ktx:1.7.0"
-
-    // Graphing library
-    // https://github.com/PhilJay/MPAndroidChart
-    implementation 'com.github.PhilJay:MPAndroidChart:v3.1.0'
-
-    // JavaStrava
-    // https://github.com/danshannon/javastravav3api
-    implementation 'com.github.danshannon:javastrava-api:1.0.3'
 }
 
 repositories {

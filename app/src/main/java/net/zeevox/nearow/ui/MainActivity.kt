@@ -13,7 +13,6 @@ import net.zeevox.nearow.databinding.ActivityMainBinding
 import net.zeevox.nearow.input.DataCollectionService
 import net.zeevox.nearow.ui.fragment.PerformanceMonitorFragment
 
-
 class MainActivity : AppCompatActivity() {
 
     /** for accessing UI elements, bind this activity to the XML */
@@ -24,16 +23,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         StrictMode.setThreadPolicy(
-            StrictMode.ThreadPolicy.Builder()
-                .detectAll()
+            StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build())
+        StrictMode.setVmPolicy(
+            VmPolicy.Builder()
+                .detectLeakedSqlLiteObjects()
+                .detectLeakedClosableObjects()
                 .penaltyLog()
+                .penaltyDeath()
                 .build())
-        StrictMode.setVmPolicy(VmPolicy.Builder()
-            .detectLeakedSqlLiteObjects()
-            .detectLeakedClosableObjects()
-            .penaltyLog()
-            .penaltyDeath()
-            .build())
 
         setTheme(R.style.Theme_Nearow)
 
@@ -53,10 +50,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Called when the activity has detected the user's press of the back
-     * key.
-     **/
+    /** Called when the activity has detected the user's press of the back key. */
     override fun onBackPressed() {
         stopService(Intent(this@MainActivity, DataCollectionService::class.java))
         super.onBackPressed()

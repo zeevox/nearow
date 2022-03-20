@@ -35,7 +35,8 @@ import net.zeevox.nearow.utils.UnitConverter
 class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener {
 
     private var _binding: FragmentPerformanceTrackerBinding? = null
-    private val binding get() = _binding!!
+    private val binding
+        get() = _binding!!
 
     /** for communicating with the service */
     lateinit var mService: DataCollectionService
@@ -43,55 +44,54 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
     /** whether there is an established link with the service */
     private var mBound: Boolean = false
 
-    /** Defines callbacks for service binding, passed to bindService()  */
-    private val connection = object : ServiceConnection {
+    /** Defines callbacks for service binding, passed to bindService() */
+    private val connection =
+        object : ServiceConnection {
 
-        override fun onServiceConnected(className: ComponentName, service: IBinder) {
-            // We've bound to LocalService, cast the IBinder and get LocalService instance
-            val binder = service as DataCollectionService.LocalBinder
-            mService = binder.getService()
-            mBound = true
+            override fun onServiceConnected(className: ComponentName, service: IBinder) {
+                // We've bound to LocalService, cast the IBinder and get LocalService instance
+                val binder = service as DataCollectionService.LocalBinder
+                mService = binder.getService()
+                mBound = true
 
-            // Listen to callbacks from the service
-            mService.setDataUpdateListener(this@PerformanceMonitorFragment)
+                // Listen to callbacks from the service
+                mService.setDataUpdateListener(this@PerformanceMonitorFragment)
+            }
+
+            override fun onServiceDisconnected(arg0: ComponentName) {
+                mBound = false
+            }
         }
-
-        override fun onServiceDisconnected(arg0: ComponentName) {
-            mBound = false
-        }
-    }
 
     companion object {
-        /**
-         * Logcat tag used for debugging
-         */
+        /** Logcat tag used for debugging */
         private val TAG = PerformanceMonitorFragment::class.java.simpleName
     }
 
     /**
-     * Register the permissions callback, which handles the user's response to the
-     * system permissions dialog.
-     * https://developer.android.com/training/permissions/requesting
+     * Register the permissions callback, which handles the user's response to the system
+     * permissions dialog. https://developer.android.com/training/permissions/requesting
      */
     private val requestPermissionLauncher =
-        registerForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { isGranted: Boolean ->
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean
+            ->
             // if permission has been granted return to where we left off and start the service
             if (isGranted) {
                 if (!mBound) startAndBindToDataCollectionService()
             } else {
-                // create an alert (dialog) to explain functionality loss since permission has been denied
-                val permissionDeniedDialog = this.let {
-                    val builder = AlertDialog.Builder(requireContext())
-                    builder.apply {
-                        setTitle(getString(R.string.dialog_title_gps_permission_denied))
-                        setMessage(getString(R.string.dialog_msg_gps_permission_denied))
-                        setPositiveButton(android.R.string.ok) { dialog, _ -> dialog.dismiss() }
+                // create an alert (dialog) to explain functionality loss since permission has been
+                // denied
+                val permissionDeniedDialog =
+                    this.let {
+                        val builder = AlertDialog.Builder(requireContext())
+                        builder.apply {
+                            setTitle(getString(R.string.dialog_title_gps_permission_denied))
+                            setMessage(getString(R.string.dialog_msg_gps_permission_denied))
+                            setPositiveButton(android.R.string.ok) { dialog, _ -> dialog.dismiss() }
+                        }
+                        // Create the AlertDialog
+                        builder.create()
                     }
-                    // Create the AlertDialog
-                    builder.create()
-                }
 
                 // show the dialog itself
                 permissionDeniedDialog.show()
@@ -110,10 +110,9 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
     private lateinit var viewSessionsButton: MaterialButton
     private lateinit var toolbarSwitchGps: SwitchMaterial
 
-
     /**
-     * Called immediately after [onCreateView]
-     * has returned, but before any saved state has been restored in to the view.
+     * Called immediately after [onCreateView] has returned, but before any saved state has been
+     * restored in to the view.
      */
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -135,24 +134,21 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
             binding.distanceFrame.visibility = visibility
         }
 
-        viewSessionsButton.setOnClickListener {
-            openSessionsHistory()
-        }
+        viewSessionsButton.setOnClickListener { openSessionsHistory() }
 
         binding.startStopButton.setOnClickListener {
-            if (!mService.dataProcessor.isRecording)
-                startTracking()
-            else Snackbar.make(
-                binding.root,
-                getString(R.string.info_use_long_press_to_stop),
-                Snackbar.LENGTH_LONG
-            ).show()
+            if (!mService.dataProcessor.isRecording) startTracking()
+            else
+                Snackbar.make(
+                        binding.root,
+                        getString(R.string.info_use_long_press_to_stop),
+                        Snackbar.LENGTH_LONG)
+                    .show()
         }
 
         // long click used to stop recording to prevent water splashes from stopping session
         binding.startStopButton.setOnLongClickListener {
-            if (!mService.dataProcessor.isRecording) startTracking()
-            else stopTracking()
+            if (!mService.dataProcessor.isRecording) startTracking() else stopTracking()
 
             true
         }
@@ -171,11 +167,10 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
 
         binding.startStopButton.apply {
             text = getString(R.string.action_stop_tracking)
-            backgroundTintList = ColorStateList.valueOf(
-                ResourcesCompat.getColor(resources, R.color.end_red, null))
+            backgroundTintList =
+                ColorStateList.valueOf(ResourcesCompat.getColor(resources, R.color.end_red, null))
             // https://stackoverflow.com/a/29146895
-            icon =
-                ResourcesCompat.getDrawable(resources, R.drawable.ic_round_stop_24, null)
+            icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_round_stop_24, null)
         }
 
         viewSessionsButton.isEnabled = false
@@ -189,10 +184,10 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
 
         binding.startStopButton.apply {
             text = getString(R.string.action_start_tracking)
-            backgroundTintList = ColorStateList.valueOf(
-                ResourcesCompat.getColor(resources, R.color.start_green, null))
-            icon =
-                ResourcesCompat.getDrawable(resources, R.drawable.ic_round_play_arrow_24, null)
+            backgroundTintList =
+                ColorStateList.valueOf(
+                    ResourcesCompat.getColor(resources, R.color.start_green, null))
+            icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_round_play_arrow_24, null)
         }
 
         viewSessionsButton.isEnabled = true
@@ -202,10 +197,8 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
     /** Bind to LocalService. If it is not running, automatically start it up */
     private fun startAndBindToDataCollectionService() {
         if (ActivityCompat.checkSelfPermission(
-                requireContext(),
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+            requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) !=
+            PackageManager.PERMISSION_GRANTED) {
             // request GPS permission, callback will re-call this function to start the service
             requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
             return
@@ -225,32 +218,27 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
         else requireContext().startService(dataCollectionServiceIntent)
 
         // bind and automatically create the service
-        requireContext().bindService(dataCollectionServiceIntent,
-            connection,
-            Context.BIND_AUTO_CREATE)
+        requireContext()
+            .bindService(dataCollectionServiceIntent, connection, Context.BIND_AUTO_CREATE)
     }
 
     /**
-     * Called when the view previously created by [onCreateView] has
-     * been detached from the fragment.
+     * Called when the view previously created by [onCreateView] has been detached from the
+     * fragment.
      */
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
     }
 
-    /**
-     * Called when the Fragment is visible to the user.
-     */
+    /** Called when the Fragment is visible to the user. */
     override fun onStart() {
         Log.i(TAG, "Fragment started")
         super.onStart()
         startAndBindToDataCollectionService()
     }
 
-    /**
-     * Called when the Fragment is no longer started.
-     */
+    /** Called when the Fragment is no longer started. */
     override fun onStop() {
         Log.i(TAG, "Fragment stopped")
         super.onStop()
@@ -259,17 +247,14 @@ class PerformanceMonitorFragment : Fragment(), DataProcessor.DataUpdateListener 
     }
 
     /**
-     * Called when stroke rate is recalculated
-     * [strokeRate] - estimated rate in strokes per minute
+     * Called when stroke rate is recalculated [strokeRate]
+     * - estimated rate in strokes per minute
      */
     override fun onStrokeRateUpdate(strokeRate: Double) {
         binding.strokeRate.text = String.format("%.1f", strokeRate)
     }
 
-
-    /**
-     * Called when a new GPS fix is obtained
-     */
+    /** Called when a new GPS fix is obtained */
     override fun onLocationUpdate(location: Location, totalDistance: Float) {
         binding.apply {
             splitFrame.visibility = View.VISIBLE

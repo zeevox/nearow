@@ -45,9 +45,7 @@ class DataProcessor(applicationContext: Context) {
 
         const val DATABASE_NAME = "nearow"
 
-        /**
-         * Return smallest power of two greater than or equal to n
-         */
+        /** Return smallest power of two greater than or equal to n */
         private fun nextPowerOf2(n: Int): Int {
             // base case already power of 2
             if (n > 0 && n and n - 1 == 0) return n
@@ -58,65 +56,51 @@ class DataProcessor(applicationContext: Context) {
             return p
         }
 
-        /**
-         * Calculate the magnitude of a three-dimensional vector
-         */
+        /** Calculate the magnitude of a three-dimensional vector */
         fun magnitude(triple: DoubleArray): Double =
             sqrt(triple[0] * triple[0] + triple[1] * triple[1] + triple[2] * triple[2])
     }
 
     interface DataUpdateListener {
         /**
-         * Called when stroke rate is recalculated
-         * [strokeRate] - estimated rate in strokes per minute
+         * Called when stroke rate is recalculated [strokeRate]
+         * - estimated rate in strokes per minute
          */
-        @UiThread
-        fun onStrokeRateUpdate(strokeRate: Double)
+        @UiThread fun onStrokeRateUpdate(strokeRate: Double)
 
         /**
-         * Called when a new GPS fix is obtained
-         * [location] - [Location] with all available GPS data
-         * [totalDistance] - new total distance travelled
+         * Called when a new GPS fix is obtained [location]
+         * - [Location] with all available GPS data [totalDistance]
+         * - new total distance travelled
          */
-        @UiThread
-        fun onLocationUpdate(location: Location, totalDistance: Float)
+        @UiThread fun onLocationUpdate(location: Location, totalDistance: Float)
     }
 
     private var listener: DataUpdateListener? = null
 
-    /**
-     * The application database
-     */
-    private val db: TrackDatabase = Room.databaseBuilder(
-        applicationContext,
-        TrackDatabase::class.java, DATABASE_NAME
-    ).build()
+    /** The application database */
+    private val db: TrackDatabase =
+        Room.databaseBuilder(applicationContext, TrackDatabase::class.java, DATABASE_NAME).build()
 
-    /**
-     * Interface with the table where individual rate-location records are stored
-     */
+    /** Interface with the table where individual rate-location records are stored */
     private val track: TrackDao = db.trackDao()
 
     /**
-     * Increment sessionId each time a new rowing session is started
-     * Getting the session ID is expected to be a very quick function
-     * call so we can afford to run it as a blocking function
+     * Increment sessionId each time a new rowing session is started Getting the session ID is
+     * expected to be a very quick function call so we can afford to run it as a blocking function
      */
     private var currentSessionId: Int = -1
 
     /**
-     * Check database for existing sessions. The new session ID is
-     * auto-incremented from the last recorded session. In case this
-     * is the first recorded session, the ID returned is 1.
+     * Check database for existing sessions. The new session ID is auto-incremented from the last
+     * recorded session. In case this is the first recorded session, the ID returned is 1.
      */
     private suspend fun getNewSessionId(): Int = coroutineScope {
         val sessionId = async(Dispatchers.IO) { (track.getLastSessionId() ?: 0) + 1 }
         sessionId.await()
     }
 
-    /**
-     * Perform CPU-intensive tasks on the `Default` coroutine scope
-     */
+    /** Perform CPU-intensive tasks on the `Default` coroutine scope */
     private val workerScope = CoroutineScope(Dispatchers.Default)
 
     fun setListener(listener: DataUpdateListener) {
@@ -134,7 +118,8 @@ class DataProcessor(applicationContext: Context) {
 
                 getCurrentStrokeRate()
 
-                // this alternate thread cannot alter UI elements so post the callback onto the main thread
+                // this alternate thread cannot alter UI elements so post the callback onto the main
+                // thread
                 // https://stackoverflow.com/a/56852228
                 Handler(Looper.getMainLooper()).post {
                     listener?.onStrokeRateUpdate(smoothedStrokeRate)
@@ -145,8 +130,7 @@ class DataProcessor(applicationContext: Context) {
         }
 
     // somewhere to store acceleration readings
-    private val accelReadings =
-        CircularDoubleBuffer(ACCEL_BUFFER_SIZE) { Random.nextDouble() }
+    private val accelReadings = CircularDoubleBuffer(ACCEL_BUFFER_SIZE) { Random.nextDouble() }
 
     // and another one for their corresponding timestamps
     // this is so that we can calculate the sampling frequency
@@ -180,7 +164,10 @@ class DataProcessor(applicationContext: Context) {
         workerScope.launch {
             // ramp-speed filtering https://stackoverflow.com/a/1736623
             val filtered =
-                DoubleArray(3) { readings[it] * FILTERING_FACTOR + lastAccelReading[it] * CONJUGATE_FILTERING_FACTOR }
+                DoubleArray(3) {
+                    readings[it] * FILTERING_FACTOR +
+                        lastAccelReading[it] * CONJUGATE_FILTERING_FACTOR
+                }
 
             // calculate magnitude of the acceleration
             val magnitude = magnitude(filtered)
@@ -197,8 +184,7 @@ class DataProcessor(applicationContext: Context) {
     }
 
     /**
-     * Called when a new GPS measurement comes in.
-     * Informs any UI listener of this new measurement
+     * Called when a new GPS measurement comes in. Informs any UI listener of this new measurement
      * and stores current location in memory
      */
     fun addGpsReading(location: Location) {
@@ -218,19 +204,13 @@ class DataProcessor(applicationContext: Context) {
         }
     }
 
-    /**
-     * Calculate the sampling frequency of the accelerometer in Hertz
-     */
+    /** Calculate the sampling frequency of the accelerometer in Hertz */
     private val accelerometerSamplingRate: Double
         get() = timestamps.size / (timestamps.head - timestamps.tail)
 
-    /**
-     * Convert an integer number of samples into a frequency in SPM
-     */
+    /** Convert an integer number of samples into a frequency in SPM */
     private fun samplesCountToFrequency(samplesPerStroke: Int): Double =
-        if (samplesPerStroke <= 0) 0.0
-        else 60.0 / samplesPerStroke * accelerometerSamplingRate
-
+        if (samplesPerStroke <= 0) 0.0 else 60.0 / samplesPerStroke * accelerometerSamplingRate
 
     @WorkerThread
     private suspend fun getCurrentStrokeRate(): Double {
@@ -242,41 +222,37 @@ class DataProcessor(applicationContext: Context) {
 
         val frequencyScores = Autocorrelator.getFrequencyScores(accelReadings)
 
-        val currentStrokeRate = samplesCountToFrequency(
-            Autocorrelator.getBestFrequency(
-                frequencyScores,
-                accelerometerSamplingRate.toInt() // no more than 60 spm
-            )
-        )
+        val currentStrokeRate =
+            samplesCountToFrequency(
+                Autocorrelator.getBestFrequency(
+                    frequencyScores, accelerometerSamplingRate.toInt() // no more than 60 spm
+                    ))
 
         recentStrokeRates.addLast(currentStrokeRate)
 
         // save into the database
-        if (mTracking) track.insert(
-            TrackPoint(
-                currentSessionId,
-                System.currentTimeMillis(),
-                smoothedStrokeRate,
-                mLocation.latitude,
-                mLocation.longitude,
-                mLocation.speed
-            )
-        )
+        if (mTracking)
+            track.insert(
+                TrackPoint(
+                    currentSessionId,
+                    System.currentTimeMillis(),
+                    smoothedStrokeRate,
+                    mLocation.latitude,
+                    mLocation.longitude,
+                    mLocation.speed))
 
         return currentStrokeRate
     }
 
     private var mTracking = false
 
-    /**
-     * Whether the [DataProcessor] is persisting values to the database
-     */
+    /** Whether the [DataProcessor] is persisting values to the database */
     val isRecording: Boolean
         get() = mTracking
 
     /**
-     * Start recording a new rowing session. Once this method is called,
-     * processed values such as stroke rate and GPS location are saved.
+     * Start recording a new rowing session. Once this method is called, processed values such as
+     * stroke rate and GPS location are saved.
      *
      * @return whether recording was successfully started
      */

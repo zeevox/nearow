@@ -36,8 +36,7 @@ class FitFileExporter(private val context: Context) {
         val directory = java.io.File(context.filesDir.path + "/exports")
         if (!directory.exists()) directory.mkdir()
 
-        val file =
-            java.io.File(directory, getFilenameForTimestamp(trackPoints.first().timestamp))
+        val file = java.io.File(directory, getFilenameForTimestamp(trackPoints.first().timestamp))
         writeMessagesToFile(activity, file)
         return file
     }
@@ -80,13 +79,14 @@ class FitFileExporter(private val context: Context) {
 
     private suspend fun writeMessagesToFile(messages: List<Mesg?>, file: java.io.File) {
         // Create the output stream
-        val encoder: FileEncoder = try {
-            FileEncoder(file, Fit.ProtocolVersion.V2_0)
-        } catch (e: FitRuntimeException) {
-            Log.e(javaClass.simpleName, "Error opening file ${file.name}")
-            e.printStackTrace()
-            return
-        }
+        val encoder: FileEncoder =
+            try {
+                FileEncoder(file, Fit.ProtocolVersion.V2_0)
+            } catch (e: FitRuntimeException) {
+                Log.e(javaClass.simpleName, "Error opening file ${file.name}")
+                e.printStackTrace()
+                return
+            }
 
         withContext(Dispatchers.IO) { for (message in messages) encoder.write(message) }
 
@@ -102,7 +102,6 @@ class FitFileExporter(private val context: Context) {
         Log.d(javaClass.simpleName, "Encoded FIT Activity file ${file.name}")
     }
 
-
     companion object {
 
         // The combination of manufacturer id, product id, and serial number should be unique.
@@ -113,8 +112,7 @@ class FitFileExporter(private val context: Context) {
         private const val SERIAL_NUMBER: Long = 2469834L
 
         /**
-         * Garmin stores lat/long as integers.
-         * Each decimal degree represents 2^32 / 360 = 11930465
+         * Garmin stores lat/long as integers. Each decimal degree represents 2^32 / 360 = 11930465
          * https://gis.stackexchange.com/a/368905
          */
         fun decimalToGarmin(pos: Double): Int = (pos * 11930465).toInt()
@@ -240,10 +238,9 @@ class FitFileExporter(private val context: Context) {
             // Create a DateFormatter object for displaying date in specified format.
             val formatter = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss", Locale.UK)
 
-            // Create a calendar object that will convert the date and time value in milliseconds to date.
-            val calendar = Calendar.getInstance().apply {
-                timeInMillis = timestamp
-            }
+            // Create a calendar object that will convert the date and time value in milliseconds to
+            // date.
+            val calendar = Calendar.getInstance().apply { timeInMillis = timestamp }
 
             return "Nero-${formatter.format(calendar.time)}.fit"
         }
