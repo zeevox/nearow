@@ -347,116 +347,41 @@ As specified in the design stage, the incoming acceleration readings are to unde
   There remains the problem of starting, but if we assume that the signal was silent until the first sample, then the transform is also zero and so we can slide the samples in one at a time without creating an initial FFT [Fast Fourier Transform].
 \end{displayquote}
 
-The \texttt{SlidingDFT} class is initialised with the number of successive samples to be used. The maximal possible identifiable frequency is half the sample frequency according to Nyquist's theoreom, so this is used to determine the number of frequency bins available. A later addition also includes a \texttt{componentsPerSample} parameter that allows for one to subdivide the frequency bins into a number of sub-bins to allow for greater frequency resolution. A DC\footnote{DC for direct current, the frequency bin for the zero-frequency sinusoid} and Nyquist\footnote{the frequency bin for the maximal frequency} bin are also included, so the number of available frequency bins is $\frac{N}{2} + 2$.
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=1.0\textwidth]{code-slidingDFT.png}
+  \caption{}
+  \label{fig:slidingDFT}
+\end{figure}
 
-The sum of the real components of all the frequency bins is stored and recalculated on each addition of a new sample. This is also used to calculate the equivalent per-bin shift in value given the newly slid-in reading.
+The \texttt{SlidingDFT} class is initialised with the number of successive samples to be used. The constructor and initialisation code is shown in figure \ref{fig:slidingDFT}. The maximal possible identifiable frequency is half the sample frequency according to Nyquist's theoreom, so this is used to determine the number of frequency bins available. A later addition also includes a \texttt{componentsPerSample} parameter that allows for one to subdivide the frequency bins into a number of sub-bins to allow for greater frequency resolution. A DC\footnote{DC for direct current, the frequency bin for the zero-frequency sinusoid} and Nyquist\footnote{the frequency bin for the maximal frequency} bin are also included, so the number of available frequency bins is $\frac{N}{2} + 2$.
 
-A function is provided to calculate the dominant frequency at the given moment in time. The frequency component with the greatest magnitude is returned.
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=1.0\textwidth]{code-SDFT-slide.png}
+  \caption{}
+  \label{fig:slideBest}
+\end{figure}
 
-\begin{lstlisting}[caption={SlidingDFT.kt}, label={lst:sdft}, language=Kotlin]
-  /**
-  * Initialise a new sliding DFT processor
-  * @param sampleCount The number of samples to store in the buffer
-  * @param componentsPerSample The number of subdivisions of each frequency 
-  * component (e.g. 10 for one decimal place)
-  * 
-  * Initially based on Imagick-FT @see https://github.com/olavholten/imagick-FT
-  */
- class SlidingDFT(private val sampleCount: Int, private val componentsPerSample: Int) {
- 
-     // Nyquist Theorem, maximal possible identifiable frequency is half the sample frequency
-     private val frequencyCount: Int = sampleCount / 2
- 
-     // Initialise an array of complex numbers to store the DFT results
-     val sliderFrequencies: Array<Frequency> =
-         (0..(frequencyCount + 1) * componentsPerSample).map {
-             Frequency(
-                 frequencyCount,
-                 (it.toDouble() / componentsPerSample),
-                 componentsPerSample
-             )
-         }.toTypedArray()
- 
-     // Sum of real components of the frequency components
-     private var realSum = 0.0
- 
-     // Slide a new sample into the SDFT
-     fun slide(value: Double) {
-         
-         // calculate the equivalent change for a single frequency component
-         val change: Double = (value - realSum) / sampleCount
-         
-         // slide each frequency component by the calculated value
-         sliderFrequencies.map { it.slide(change) }
+The sum of the real components of all the frequency bins is stored and recalculated on each addition of a new sample. This is also used to calculate the equivalent per-bin shift in value given the newly slid-in reading. The calculated shift in value is applied to each frequency bin in turn. A function is also  provided to calculate the dominant frequency at the given moment in time -- it returns the wavelength of the frequency bin with the greatest magnitude. The code for the two aforementioned methods is shown in figure \ref{fig:slideBest}.
 
-          // update the sum of the real components
-         this.realSum = sliderFrequencies.sumOf { it.complex.real }
-     }
- 
-     // the frequency component with the greatest amplitude is selected
-     fun getMaximallyCorrelatedFrequency(): Frequency? =
-         sliderFrequencies.maxByOrNull { it.polar.magnitude } 
- }
-\end{lstlisting}
+Within the \texttt{SlidingDFT} class an inner class called \texttt{Frequency} is defined, the code for which is displayed in figure \ref{fig:innerClassFrequency}. This class represents a single frequency component of the SDFT. As stated in the paper, each frequency component experiences a rotation of $2\pi n / N$ radians, where $n$ is the wavelength and $N$ is the window size. Since we halved the window size to obtain the total number of frequency bins, the factor of $2$ cancels out. A correction is applied for DC and Nyquist frequency bins.
 
-Within the \texttt{SlidingDFT} class an inner class called \texttt{Frequency} is defined. This class represents a single frequency component of the SDFT. As stated in the paper, each frequency component experiences a rotation of $2\pi n / N$ radians, where $n$ is the wavelength and $N$ is the window size. Since we halved the window size to obtain the total number of frequency bins, the factor of $2$ cancels out. A correction is applied for DC and Nyquist frequency bins.
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=1.0\textwidth]{code-innerClassFrequency.png}
+  \caption{}
+  \label{fig:innerClassFrequency}
+\end{figure}
 
+\texttt{Polar} and \texttt{Complex} are two data classes that represent a complex number in different forms. The two of them make use of a feature of Kotlin that I find rather appealing: infix functions. Both have an \texttt{into} function that converts the imaginary number from one representation into another. By using these \texttt{into} methods, we avoid recreating the objects when the imaginary number is changed from one representation to another in the \texttt{slide} function of the inner \texttt{Frequency} class, making the algorithm more efficient.
 
-\begin{lstlisting}[caption={SlidingDFT.Frequency}, label={lst:sdftFrequency}, language=Kotlin]
-  // class representing a single frequency component
-  inner class Frequency constructor(
-      // the total number of bins in the DFT (including DC and Nyquist)
-      totalBinCount: Int,
-      // the wavelength of this frequency component
-      val wavelength: Double, 
-      // how many frequencies each wavelength is subdivided into
-      componentsPerSample: Int 
-  ) {
-      private val turnDegrees: Double = kotlin.math.PI / totalBinCount * wavelength
-
-      var complex: Complex = Complex(0.0, 0.0)
-      var polar: Polar = Polar(0.0, 0.0)
-
-      private val multiplier: Double =
-          (if (wavelength == 0.0 || wavelength == totalBinCount.toDouble()) 1.0 
-              else 2.0) / componentsPerSample
-
-      fun slide(change: Double) {
-          complex += change * multiplier
-          complex into polar
-          polar.addPhase(turnDegrees)
-          polar into complex
-      }
-
-  }
-\end{lstlisting}
-
-\texttt{Polar} and \texttt{Complex} are two data classes that represent a complex number in different forms. Both have an infix function that converts the number from one type to another.
-
-
-\begin{lstlisting}[caption={Polar.kt}, label={lst:polar}, language=Kotlin]
-  data class Polar(var magnitude: Double, var phase: Double) {
-    fun addPhase(phaseTurn: Double) {
-        phase += phaseTurn
-    }
-
-    infix fun into(complex: Complex) {
-        complex.real = cos(phase) * magnitude
-        complex.imaginary = sin(phase) * magnitude
-    }
-  }
-\end{lstlisting}
-
-\begin{lstlisting}[caption={Complex.kt}, label={lst:complex}, language=Kotlin]
-  data class Complex(var real: Double, var imaginary: Double) {
-    operator fun plus(otherReal: Double): Complex = Complex(real + otherReal, imaginary)
-
-    infix fun into(polar: Polar) {
-        polar.magnitude = sqrt(real * real + imaginary * imaginary)
-        polar.phase = atan2(imaginary, real)
-    }
-  }
-\end{lstlisting}
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=1.0\textwidth]{code-SDFT-complex-polar.png}
+  \caption{}
+  \label{fig:complexPolar}
+\end{figure}
 
 Unfortunately in testing the sliding DFT proved to be inadequate for the task at hand. Although incredibly efficient (the most costly operation being the calculation of a sine and cosine) it was not able to accurately calculate the frequency of the signal. It was discovered only after some head-bashing firmly within the implementation stage that a fundamental downside of the Discrete Fourier Transform is that it is not possible to do DFT with low latency and fine frequency resolution at low frequencies.\cite{dsp_stack_dft} The frequency resolution is limited by the sampling rate, which, for a modern smartphone is somewhere in the region of 50Hz. This is insufficient to find a reasonable compromise.
 
