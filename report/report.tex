@@ -480,7 +480,7 @@ $R$ is to be calculated for every possible value of $\tau$ up to half the window
 
 \section{Data storage}
 
-A SQL database is chosen to store the data. The database is to be used to store the the stroke rate, the location of the boat and the time of the readings. Each row in the database stores the mentioned quantities, as well speed of the boat at that instant, measured in metres per second. A separate column for speed allows for more accurate speed recordings than a simple $\frac{\text{distance}}{\text{time}}$ calculation. Each entry stores a unique point ID, as well as the ID of the session that it belongs to. The table called \texttt{records} is defined with the following schema:
+A SQL database is chosen to store the data. The database is to be used to store the the stroke rate, the location of the boat and the time of the readings. Each row in the database stores the mentioned quantities, as well as the speed of the boat at that instant, measured in metres per second. A separate column for speed allows for more accurate speed recordings than a simple $\frac{\text{distance}}{\text{time}}$ calculation. Each entry stores a unique point ID, as well as the ID of the session that it belongs to. The table called \texttt{records} is defined with the following schema:
 
 \begin{lstlisting}[language=sql]
 CREATE TABLE IF NOT EXISTS records (
@@ -582,7 +582,53 @@ A separate view, accessible via a \textit{view sessions} button on the applicati
 
 \chapter{Technical solution}
 
-\section{Data collection}
+\section{Overview}
+
+\begin{itemize}
+  \item \texttt{net.zeevox.nearow}
+  \begin{itemize}
+    \item \texttt{data}
+      \begin{itemize}
+      \item \texttt{Autocorrelator.kt}
+      \item \texttt{CircularDoubleBuffer.kt}
+      \item \texttt{DataProcessor.kt}
+    \end{itemize}
+    \item \texttt{db}
+    \begin{itemize}
+      \item \texttt{Session.kt}
+      \item \texttt{TrackDao.kt}
+      \item \texttt{TrackPoint.kt}
+      \item \texttt{TrackDatabase.kt}
+    \end{itemize}
+    \item \texttt{input}
+    \begin{itemize}
+      \item \texttt{DataCollectionService.kt}
+    \end{itemize}
+    \item \texttt{output}
+    \begin{itemize}
+      \item \texttt{fragment}
+      \begin{itemize}
+        \item \texttt{PerformanceMonitorFragment.kt}
+        \item \texttt{SessionsFragment.kt}
+      \end{itemize}
+      \item \texttt{recyclerview}
+      \begin{itemize}
+        \item \texttt{SessionsListAdapter.kt}
+      \end{itemize}
+      \item \texttt{activity}
+      \begin{itemize}
+        \item \texttt{MainActivity.kt}
+        \item \texttt{SessionsActivity.kt}
+      \end{itemize}
+    \end{itemize}
+    \item \texttt{utils}
+    \begin{itemize}
+      \item \texttt{UnitConverter.kt}
+    \end{itemize}
+  \end{itemize}
+\end{itemize}
+
+\section{Data collection}\label{DataProcessorkt}
 
 The gathering and aggregation of collected data is handled by the \texttt{DataCollectionService}. This service is started when the application is started. It is run as service, and as such inherits from the Android \texttt{Service} class.
 
@@ -653,7 +699,7 @@ By adding more frequency bins, a far higher resolution is achieved, with accurac
 
 As such, it was time to return back to the drawing board and a new solution was proposed.
 
-\subsection{\texttt{Autocorrelator.kt}}
+\subsection{\texttt{Autocorrelator.kt}}\label{Autocorrelatorkt}
 
 The \texttt{Autocorrelator} class provides utility methods for scoring the input readings according to their autocorrelation.
 
@@ -680,7 +726,7 @@ The correlation scores are calculated for each lag, or offset, and saved into a 
 
 The \texttt{getBestFrequency(correlations)} method shown in \ref{fig:getBestFrequency} selects the "best" frequency out of the provided autocorrelation array by choosing the one with the highest value. Stroke rates below a specified threshold are ignored. This is because, naturally, a tiny offset (e.g. $1$ sample) will produce a near-perfect correlation. Since very low-rate stroke detection is not necessary these frequencies can be discounted.
 
-\subsection{\texttt{CircularDoubleBuffer.kt}}
+\subsection{\texttt{CircularDoubleBuffer.kt}}\label{CircularDoubleBufferkt}
 
 The \texttt{CircularDoubleBuffer} class provides an implementation of a circular buffer, also known as a ring buffer, for storing \texttt{Double} values. Its primary use in the context of this application is for storing recent acceleration readings. A circular buffer was chosen for its memory efficiency and fast append operations. It fulfills the obligations of Kotlin's \texttt{Collection} interface.
 
@@ -805,7 +851,7 @@ The \texttt{TrackDao} interface is used by the \texttt{TrackDatabase} class, whi
 
 The code for the four database-related classes is shown overleaf.
 
-\includepdf[pages=-,pagecommand={},width=1.0\textwidth]{code/Database.pdf}
+\includepdf[pages=-,pagecommand={\label{Databasestuff}},width=1.0\textwidth]{code/Database.pdf}
 
 \section{File export}
 
