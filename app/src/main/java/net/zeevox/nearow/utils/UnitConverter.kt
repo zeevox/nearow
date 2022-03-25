@@ -4,6 +4,7 @@ import kotlin.math.pow
 
 class UnitConverter {
     companion object {
+
         /**
          * Convert a speed, measured in metres per second, into the number of seconds that would be
          * required to cover 500m at this speed.

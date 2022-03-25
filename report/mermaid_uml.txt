@@ -1,0 +1,81 @@
+classDiagram
+DataProcessor *-- DataCollectionService
+DataUpdateListener *-- DataProcessor
+DataUpdateListener <|.. PerformanceMonitorFragment
+    DataCollectionService o-- PerformanceMonitorFragment
+    PerformanceMonitorFragment *-- MainActivity
+    SessionsFragment *-- SessionActivity
+    FitFileExporter *-- SessionsFragment
+    Activity <|-- MainActivity
+    Activity <|-- SessionActivity
+    Fragment <|-- PerformanceMonitorFragment
+    Fragment <|-- SessionsFragment
+    class PerformanceMonitorFragment{
+        -Button viewSessionsButton
+        -Switch enableGpsSwitch
+        -Service mService
+        -Boolean mBound
+        -startTracking()
+        -stopTracking()
+      -startAndBindToDataCollectionService()
+    }
+    class SessionsFragment{
+        -TrackDatabase db
+        -TrackDao track
+        -onSessionShareButtonClicked()
+        -onTrackExported()
+    }
+    class FitFileExporter{
+        +exportTrackPoints(ListTrackPoint)
+    }
+    class DataUpdateListener{
+        <<interface>>
+        +onStrokeRateUpdate(strokeRate)
+        +onLocationUpdate(location, distance)
+    }
+    class DataProcessor{
+        -DataUpdateListener listener
+        -TrackDatabase db
+        -TrackDao track
+        +Boolean isRecording
+        +setListener()
+        +addAccelerometerReading()
+        +addGpsReading()
+        +startRecording()
+        +stopRecording()
+        -getCurrentStrokeRate()
+
+    }
+    class DataCollectionService{
+        <<Service>>
+        +DataProcessor dataProcessor
+        -Boolean inForeground
+        +enableGps()
+        +disableGps()
+        +setDataUpdateListener(listener)
+        -startForeground()
+        -stopForeground()
+        -registerSensorListener()
+        -initGpsClient()
+    }
+    class MainActivity{
+      +override onBackPressed()
+    }
+    class SessionActivity{
+        +override onSupportNavigateUp()
+    }
+    class Activity{
+        +supportFragmentManager
+        +onCreate()
+        +onStop()
+        +onStart()
+        +onBackPressed()
+        ....()
+    }
+    class Fragment {
+        onViewCreated()
+        onDestroyView()
+        onStart()
+        onStop()
+    }
+            

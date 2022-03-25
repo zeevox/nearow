@@ -13,10 +13,13 @@ class UnitConversionTests {
     }
 
     @Test
-    // checking with values from https://www.concept2.com/indoor-rowers/training/calculators/watts-calculator
+    // checking with values from
+    // https://www.concept2.com/indoor-rowers/training/calculators/watts-calculator
     fun speedToWattsTest() {
         assertEquals(179.2, UnitConverter.speedToWatts(4.0f), 0.1)
         assertEquals(350.0, UnitConverter.speedToWatts(5.0f), 0.1)
         assertEquals(1433.6, UnitConverter.speedToWatts(8.0f), 0.1)
     }
 }
+
+
